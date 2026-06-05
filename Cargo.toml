@@ -52,4 +52,4 @@ path = "examples/05_fill_between.rs"
 
 [dev-dependencies]
 insta = { version = "1", features = ["glob"] }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.1" }
