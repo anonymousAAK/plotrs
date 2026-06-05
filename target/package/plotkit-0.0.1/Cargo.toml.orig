@@ -1,0 +1,9 @@
+[package]
+name = "plotkit"
+version = "0.0.1"
+edition = "2021"
+description = "A modern, ergonomic plotting library for Rust"
+license = "MIT"
+repository = "https://github.com/pyscripter99/plotkit"
+keywords = ["plotting", "chart", "visualization", "svg", "graph"]
+categories = ["visualization"]
