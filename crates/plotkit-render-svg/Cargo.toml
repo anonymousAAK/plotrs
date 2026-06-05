@@ -1,0 +1,11 @@
+[package]
+name = "plotkit-render-svg"
+version = "0.1.0-dev"
+edition = "2021"
+rust-version = "1.75"
+description = "SVG rendering backend for plotkit"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pyscripter99/plotkit"
+
+[dependencies]
+plotkit-core = { path = "../plotkit-core", version = "0.1.0-dev" }

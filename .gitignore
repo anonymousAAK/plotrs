@@ -1,3 +1,23 @@
+# Build
+target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated output
+examples/output/
+*.pdb
+
+# Project docs (generated, not tracked)
 HOME.md
 IMPLEMENTATION_PLAN.md
 plotkit-knowledge-hub/

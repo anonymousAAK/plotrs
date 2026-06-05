@@ -1,0 +1,5 @@
+---
+source: tests/golden_tests.rs
+expression: hash_png(&bytes)
+---
+png_74523_8982

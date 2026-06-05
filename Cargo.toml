@@ -1,9 +1,55 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
 [package]
 name = "plotkit"
-version = "0.0.1"
+version = "0.1.0-dev"
 edition = "2021"
-description = "A modern, ergonomic plotting library for Rust"
-license = "MIT"
+rust-version = "1.75"
+description = "A matplotlib-shaped, publication-quality plotting library for Rust"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/pyscripter99/plotkit"
-keywords = ["plotting", "chart", "visualization", "svg", "graph"]
-categories = ["visualization"]
+homepage = "https://plotkit.rs"
+documentation = "https://docs.rs/plotkit"
+readme = "README.md"
+keywords = ["plotting", "chart", "visualization", "svg", "matplotlib"]
+categories = ["visualization", "science", "multimedia::images"]
+
+[dependencies]
+plotkit-core = { path = "crates/plotkit-core", version = "0.1.0-dev" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0-dev" }
+plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.1.0-dev", optional = true }
+
+[features]
+default = ["png", "svg"]
+png = []
+svg = ["dep:plotkit-render-svg"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[[example]]
+name = "01_line"
+path = "examples/01_line.rs"
+
+[[example]]
+name = "02_scatter"
+path = "examples/02_scatter.rs"
+
+[[example]]
+name = "03_bar"
+path = "examples/03_bar.rs"
+
+[[example]]
+name = "04_histogram"
+path = "examples/04_histogram.rs"
+
+[[example]]
+name = "05_fill_between"
+path = "examples/05_fill_between.rs"
+
+[dev-dependencies]
+insta = { version = "1", features = ["glob"] }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0-dev" }
