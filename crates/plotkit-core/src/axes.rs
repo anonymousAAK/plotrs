@@ -181,6 +181,8 @@ impl Axes {
             label: None,
             alpha: 0.8,
             colors: None,
+            c: None,
+            cmap: None,
         };
         self.artists.push(Artist::Scatter(artist));
         match self.artists.last_mut().expect("just pushed") {
@@ -403,6 +405,207 @@ impl Axes {
         self.artists.push(Artist::FillBetween(artist));
         match self.artists.last_mut().expect("just pushed") {
             Artist::FillBetween(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Plots a step (staircase) chart connecting `(x, y)` data points.
+    ///
+    /// Returns a mutable reference to the [`StepArtist`] for chaining.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::SeriesLengthMismatch`] or [`PlotError::EmptyData`]
+    /// on invalid input.
+    pub fn step<X: IntoSeries, Y: IntoSeries>(
+        &mut self,
+        x: X,
+        y: Y,
+    ) -> Result<&mut StepArtist> {
+        let xs = x.into_series();
+        let ys = y.into_series();
+        if xs.len() != ys.len() {
+            return Err(PlotError::SeriesLengthMismatch {
+                expected: xs.len(),
+                got: ys.len(),
+            });
+        }
+        if xs.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = StepArtist {
+            x: xs,
+            y: ys,
+            color,
+            width: 1.5,
+            where_step: StepWhere::Pre,
+            label: None,
+            alpha: 1.0,
+        };
+        self.artists.push(Artist::Step(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Step(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Plots a stem (lollipop) chart from `(x, y)` data points.
+    ///
+    /// Returns a mutable reference to the [`StemArtist`] for chaining.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::SeriesLengthMismatch`] or [`PlotError::EmptyData`]
+    /// on invalid input.
+    pub fn stem<X: IntoSeries, Y: IntoSeries>(
+        &mut self,
+        x: X,
+        y: Y,
+    ) -> Result<&mut StemArtist> {
+        let xs = x.into_series();
+        let ys = y.into_series();
+        if xs.len() != ys.len() {
+            return Err(PlotError::SeriesLengthMismatch {
+                expected: xs.len(),
+                got: ys.len(),
+            });
+        }
+        if xs.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = StemArtist {
+            x: xs,
+            y: ys,
+            color,
+            line_width: 1.5,
+            marker_size: 6.0,
+            baseline: 0.0,
+            label: None,
+            alpha: 1.0,
+        };
+        self.artists.push(Artist::Stem(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Stem(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a box-and-whisker plot from one or more data groups.
+    ///
+    /// Each inner `Vec<f64>` produces one box. Groups are placed at integer
+    /// x-positions starting from 0.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::EmptyData`] if `datasets` is empty.
+    pub fn boxplot(&mut self, datasets: Vec<Vec<f64>>) -> Result<&mut BoxPlotArtist> {
+        use crate::charts::boxplot::compute_stats;
+        if datasets.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let factor = 1.5;
+        let stats: Vec<_> = datasets.iter().map(|d| compute_stats(d, factor)).collect();
+        let labels: Vec<String> = (0..datasets.len()).map(|i| format!("{}", i + 1)).collect();
+        let artist = BoxPlotArtist {
+            stats,
+            labels,
+            color,
+            label: None,
+            alpha: 1.0,
+            box_width: 0.5,
+            show_outliers: true,
+            whisker_iq_factor: factor,
+            raw_data: datasets,
+        };
+        self.artists.push(Artist::BoxPlot(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::BoxPlot(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates an error bar plot from `(x, y)` data points.
+    ///
+    /// Returns an owned [`ErrorBarArtist`] that can be configured with
+    /// builder methods (`.yerr_symmetric()`, `.cap_size()`, etc.) and then
+    /// added to the axes via [`add_errorbar`](Axes::add_errorbar).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::SeriesLengthMismatch`] or [`PlotError::EmptyData`]
+    /// on invalid input.
+    pub fn errorbar<X: IntoSeries, Y: IntoSeries>(
+        &mut self,
+        x: X,
+        y: Y,
+    ) -> Result<ErrorBarArtist> {
+        let xs = x.into_series();
+        let ys = y.into_series();
+        if xs.len() != ys.len() {
+            return Err(PlotError::SeriesLengthMismatch {
+                expected: xs.len(),
+                got: ys.len(),
+            });
+        }
+        if xs.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        Ok(ErrorBarArtist {
+            x: xs,
+            y: ys,
+            xerr: None,
+            yerr: None,
+            color,
+            label: None,
+            cap_size: 4.0,
+            line_width: 1.0,
+        })
+    }
+
+    /// Adds a finalized [`ErrorBarArtist`] to the axes.
+    ///
+    /// Use this after configuring the artist returned by
+    /// [`errorbar`](Axes::errorbar).
+    pub fn add_errorbar(&mut self, artist: ErrorBarArtist) {
+        self.artists.push(Artist::ErrorBar(artist));
+    }
+
+    /// Creates a heatmap from a 2D grid of values.
+    ///
+    /// Returns a mutable reference to the [`HeatmapArtist`] for chaining
+    /// builder methods (`.colormap()`, `.vmin()`, `.show_values()`, etc.).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::EmptyData`] if `data` is empty.
+    pub fn heatmap(&mut self, data: Vec<Vec<f64>>) -> Result<&mut HeatmapArtist> {
+        if data.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = HeatmapArtist {
+            data,
+            x_labels: None,
+            y_labels: None,
+            cmap: crate::colormap::Colormap::Viridis,
+            vmin: None,
+            vmax: None,
+            show_values: false,
+            color,
+            label: None,
+        };
+        self.artists.push(Artist::Heatmap(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Heatmap(a) => Ok(a),
             _ => unreachable!(),
         }
     }
@@ -643,6 +846,53 @@ impl Axes {
                         y_hi = y_hi.max(hi);
                     }
                 }
+                Artist::Step(a) => {
+                    if let Some((lo, hi)) = a.x.bounds() {
+                        x_lo = x_lo.min(lo);
+                        x_hi = x_hi.max(hi);
+                    }
+                    if let Some((lo, hi)) = a.y.bounds() {
+                        y_lo = y_lo.min(lo);
+                        y_hi = y_hi.max(hi);
+                    }
+                }
+                Artist::Stem(a) => {
+                    if let Some((lo, hi)) = a.x.bounds() {
+                        x_lo = x_lo.min(lo);
+                        x_hi = x_hi.max(hi);
+                    }
+                    if let Some((lo, hi)) = a.y.bounds() {
+                        y_lo = y_lo.min(lo.min(a.baseline));
+                        y_hi = y_hi.max(hi.max(a.baseline));
+                    }
+                }
+                Artist::BoxPlot(a) => {
+                    let n = a.stats.len() as f64;
+                    x_lo = 0.0_f64.min(x_lo);
+                    x_hi = n.max(x_hi);
+                    for s in &a.stats {
+                        y_lo = y_lo.min(s.whisker_low);
+                        y_hi = y_hi.max(s.whisker_high);
+                        for &o in &s.outliers {
+                            y_lo = y_lo.min(o);
+                            y_hi = y_hi.max(o);
+                        }
+                    }
+                }
+                Artist::ErrorBar(a) => {
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
+                Artist::Heatmap(a) => {
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
             }
         }
 
@@ -748,6 +998,11 @@ impl Axes {
             Artist::Bar(a) => self.draw_bar(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::Histogram(a) => self.draw_hist(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::FillBetween(a) => self.draw_fill_between(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::Step(a) => self.draw_step(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::Stem(a) => self.draw_stem(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::BoxPlot(a) => self.draw_boxplot(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::ErrorBar(a) => self.draw_errorbar(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::Heatmap(a) => self.draw_heatmap(renderer, a, plot_area, xmin, xmax, ymin, ymax),
         }
     }
 
@@ -827,8 +1082,16 @@ impl Axes {
         ymax: f64,
         theme: &Theme,
     ) {
-        let color = artist.color.with_alpha((artist.alpha * 255.0) as u8);
-        let paint = Paint::new(color);
+        let alpha_byte = (artist.alpha * 255.0) as u8;
+
+        // Pre-compute per-point colors from c/cmap if set.
+        let cmap_colors: Option<Vec<Color>> = match (&artist.c, &artist.cmap) {
+            (Some(c_vals), Some(cmap)) => Some(cmap.map_values(c_vals)),
+            _ => None,
+        };
+
+        let default_color = artist.color.with_alpha(alpha_byte);
+        let default_paint = Paint::new(default_color);
         let radius = artist.size / 2.0;
 
         for i in 0..artist.x.len() {
@@ -838,6 +1101,15 @@ impl Axes {
                 plot_area,
                 xmin, xmax, ymin, ymax,
             );
+
+            // Resolve the paint for this point: c/cmap > colors > color.
+            let paint = if let Some(ref cc) = cmap_colors {
+                Paint::new(cc[i].with_alpha(alpha_byte))
+            } else if let Some(ref cs) = artist.colors {
+                Paint::new(cs[i].with_alpha(alpha_byte))
+            } else {
+                default_paint
+            };
 
             let marker_path = match artist.marker {
                 Marker::Circle | Marker::Point => Path::circle(pt, radius),
@@ -1056,6 +1328,7 @@ impl Axes {
         let paint = Paint::new(color);
         renderer.fill_path(&path, &paint, Affine::IDENTITY);
     }
+
 
     // -----------------------------------------------------------------------
     // Step 7: Spines
@@ -1279,10 +1552,404 @@ impl Axes {
     // Step 10: Legend
     // -----------------------------------------------------------------------
 
+
+    /// Draws a box-and-whisker plot: box from Q1 to Q3, median line, whiskers,
+    /// caps, and optional outlier dots.
+    fn draw_boxplot(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &BoxPlotArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        let n = artist.stats.len();
+        if n == 0 {
+            return;
+        }
+
+        let fill_color = artist.color.with_alpha((artist.alpha * 255.0) as u8);
+        let stroke_color = Color::BLACK.with_alpha((artist.alpha * 255.0) as u8);
+        let paint = Paint::new(stroke_color);
+        let thin = Stroke::new(1.0);
+        let thick = Stroke::new(2.0);
+        let hair = Stroke::new(0.5);
+
+        for (i, stats) in artist.stats.iter().enumerate() {
+            let cx = i as f64 + 0.5;
+            let half = artist.box_width / 2.0;
+            let left = cx - half;
+            let right = cx + half;
+
+            // --- Box (Q1 to Q3) ---
+            let tl = self.data_to_pixel(left, stats.q3, plot_area, xmin, xmax, ymin, ymax);
+            let br = self.data_to_pixel(right, stats.q1, plot_area, xmin, xmax, ymin, ymax);
+            let box_rect_path = {
+                let mut p = Path::new();
+                p.move_to(tl.x, tl.y);
+                p.line_to(br.x, tl.y);
+                p.line_to(br.x, br.y);
+                p.line_to(tl.x, br.y);
+                p.close();
+                p
+            };
+            renderer.fill_path(&box_rect_path, &Paint::new(fill_color), Affine::IDENTITY);
+            renderer.stroke_path(&box_rect_path, &paint, &thin, Affine::IDENTITY);
+
+            // --- Median line ---
+            let ml = self.data_to_pixel(left, stats.median, plot_area, xmin, xmax, ymin, ymax);
+            let mr = self.data_to_pixel(right, stats.median, plot_area, xmin, xmax, ymin, ymax);
+            let mut median_path = Path::new();
+            median_path.move_to(ml.x, ml.y);
+            median_path.line_to(mr.x, mr.y);
+            renderer.stroke_path(&median_path, &paint, &thick, Affine::IDENTITY);
+
+            // --- Lower whisker ---
+            let wl_bottom = self.data_to_pixel(cx, stats.whisker_low, plot_area, xmin, xmax, ymin, ymax);
+            let wl_top = self.data_to_pixel(cx, stats.q1, plot_area, xmin, xmax, ymin, ymax);
+            let mut wl_path = Path::new();
+            wl_path.move_to(wl_top.x, wl_top.y);
+            wl_path.line_to(wl_bottom.x, wl_bottom.y);
+            renderer.stroke_path(&wl_path, &paint, &thin, Affine::IDENTITY);
+
+            // Lower cap
+            let cap_left = self.data_to_pixel(cx - half * 0.5, stats.whisker_low, plot_area, xmin, xmax, ymin, ymax);
+            let cap_right = self.data_to_pixel(cx + half * 0.5, stats.whisker_low, plot_area, xmin, xmax, ymin, ymax);
+            let mut cap_path = Path::new();
+            cap_path.move_to(cap_left.x, cap_left.y);
+            cap_path.line_to(cap_right.x, cap_right.y);
+            renderer.stroke_path(&cap_path, &paint, &thin, Affine::IDENTITY);
+
+            // --- Upper whisker ---
+            let wu_bottom = self.data_to_pixel(cx, stats.q3, plot_area, xmin, xmax, ymin, ymax);
+            let wu_top = self.data_to_pixel(cx, stats.whisker_high, plot_area, xmin, xmax, ymin, ymax);
+            let mut wu_path = Path::new();
+            wu_path.move_to(wu_bottom.x, wu_bottom.y);
+            wu_path.line_to(wu_top.x, wu_top.y);
+            renderer.stroke_path(&wu_path, &paint, &thin, Affine::IDENTITY);
+
+            // Upper cap
+            let ucap_left = self.data_to_pixel(cx - half * 0.5, stats.whisker_high, plot_area, xmin, xmax, ymin, ymax);
+            let ucap_right = self.data_to_pixel(cx + half * 0.5, stats.whisker_high, plot_area, xmin, xmax, ymin, ymax);
+            let mut ucap_path = Path::new();
+            ucap_path.move_to(ucap_left.x, ucap_left.y);
+            ucap_path.line_to(ucap_right.x, ucap_right.y);
+            renderer.stroke_path(&ucap_path, &paint, &thin, Affine::IDENTITY);
+
+            // --- Outliers ---
+            if artist.show_outliers {
+                let r = 3.0;
+                for &val in &stats.outliers {
+                    let pt = self.data_to_pixel(cx, val, plot_area, xmin, xmax, ymin, ymax);
+                    let mut dot = Path::new();
+                    for seg in 0..8 {
+                        let angle = std::f64::consts::TAU * seg as f64 / 8.0;
+                        let dx = r * angle.cos();
+                        let dy = r * angle.sin();
+                        if seg == 0 {
+                            dot.move_to(pt.x + dx, pt.y + dy);
+                        } else {
+                            dot.line_to(pt.x + dx, pt.y + dy);
+                        }
+                    }
+                    dot.close();
+                    renderer.fill_path(&dot, &Paint::new(fill_color), Affine::IDENTITY);
+                    renderer.stroke_path(&dot, &paint, &hair, Affine::IDENTITY);
+                }
+            }
+        }
+    }
+
     /// Draws the legend box showing labeled artists.
     ///
     /// Builds [`LegendEntry`] items from the axes' artists and delegates to
     /// [`legend::draw_legend`] for measurement, positioning, and rendering.
+
+    /// Draws a step (staircase) chart.
+    fn draw_step(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &StepArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        if artist.x.len() < 2 {
+            return;
+        }
+        let color = artist.color.with_alpha((artist.alpha * 255.0) as u8);
+        let paint = Paint::new(color);
+        let stroke = Stroke::new(artist.width);
+
+        let mut path = Path::new();
+        let first = self.data_to_pixel(
+            artist.x.data[0], artist.y.data[0],
+            plot_area, xmin, xmax, ymin, ymax,
+        );
+        path.move_to(first.x, first.y);
+
+        for i in 1..artist.x.len() {
+            let prev = self.data_to_pixel(
+                artist.x.data[i - 1], artist.y.data[i - 1],
+                plot_area, xmin, xmax, ymin, ymax,
+            );
+            let cur = self.data_to_pixel(
+                artist.x.data[i], artist.y.data[i],
+                plot_area, xmin, xmax, ymin, ymax,
+            );
+            match artist.where_step {
+                StepWhere::Pre => {
+                    path.line_to(prev.x, cur.y);
+                    path.line_to(cur.x, cur.y);
+                }
+                StepWhere::Post => {
+                    path.line_to(cur.x, prev.y);
+                    path.line_to(cur.x, cur.y);
+                }
+                StepWhere::Mid => {
+                    let mid_x = (prev.x + cur.x) / 2.0;
+                    path.line_to(mid_x, prev.y);
+                    path.line_to(mid_x, cur.y);
+                    path.line_to(cur.x, cur.y);
+                }
+            }
+        }
+        renderer.stroke_path(&path, &paint, &stroke, Affine::IDENTITY);
+    }
+
+    /// Draws a stem (lollipop) chart.
+    fn draw_stem(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &StemArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        if artist.x.is_empty() {
+            return;
+        }
+        let alpha_byte = (artist.alpha * 255.0) as u8;
+        let color = artist.color.with_alpha(alpha_byte);
+        let paint = Paint::new(color);
+        let stroke = Stroke::new(artist.line_width);
+        let radius = artist.marker_size / 2.0;
+
+        // Draw baseline.
+        let bl_left = self.data_to_pixel(
+            artist.x.data[0], artist.baseline,
+            plot_area, xmin, xmax, ymin, ymax,
+        );
+        let bl_right = self.data_to_pixel(
+            *artist.x.data.last().unwrap(), artist.baseline,
+            plot_area, xmin, xmax, ymin, ymax,
+        );
+        let mut bl_path = Path::new();
+        bl_path.move_to(bl_left.x, bl_left.y);
+        bl_path.line_to(bl_right.x, bl_right.y);
+        let bl_paint = Paint::new(Color::BLACK.with_alpha(alpha_byte));
+        let bl_stroke = Stroke::new(0.8);
+        renderer.stroke_path(&bl_path, &bl_paint, &bl_stroke, Affine::IDENTITY);
+
+        // Draw stems and markers.
+        for i in 0..artist.x.len() {
+            let base = self.data_to_pixel(
+                artist.x.data[i], artist.baseline,
+                plot_area, xmin, xmax, ymin, ymax,
+            );
+            let tip = self.data_to_pixel(
+                artist.x.data[i], artist.y.data[i],
+                plot_area, xmin, xmax, ymin, ymax,
+            );
+            let mut stem_path = Path::new();
+            stem_path.move_to(base.x, base.y);
+            stem_path.line_to(tip.x, tip.y);
+            renderer.stroke_path(&stem_path, &paint, &stroke, Affine::IDENTITY);
+            let marker = Path::circle(tip, radius);
+            renderer.fill_path(&marker, &paint, Affine::IDENTITY);
+        }
+    }
+
+    /// Draws an error bar plot: center line with circle markers, vertical
+    /// and/or horizontal error bars with caps.
+    fn draw_errorbar(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &ErrorBarArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        if artist.x.is_empty() {
+            return;
+        }
+        let paint = Paint::new(artist.color);
+        let stroke = Stroke::new(artist.line_width);
+        let marker_radius = 3.0;
+
+        // Draw center connecting line.
+        let mut line_path = Path::new();
+        let first = self.data_to_pixel(
+            artist.x.data[0], artist.y.data[0],
+            plot_area, xmin, xmax, ymin, ymax,
+        );
+        line_path.move_to(first.x, first.y);
+        for i in 1..artist.x.len() {
+            let pt = self.data_to_pixel(
+                artist.x.data[i], artist.y.data[i],
+                plot_area, xmin, xmax, ymin, ymax,
+            );
+            line_path.line_to(pt.x, pt.y);
+        }
+        renderer.stroke_path(&line_path, &paint, &stroke, Affine::IDENTITY);
+
+        // Draw markers and error bars for each point.
+        for i in 0..artist.x.len() {
+            let xv = artist.x.data[i];
+            let yv = artist.y.data[i];
+            let center = self.data_to_pixel(xv, yv, plot_area, xmin, xmax, ymin, ymax);
+
+            // Circle marker at the data point.
+            let marker = Path::circle(center, marker_radius);
+            renderer.fill_path(&marker, &paint, Affine::IDENTITY);
+
+            // Vertical error bars (yerr).
+            if let Some(ref yerr) = artist.yerr {
+                let (lo, hi) = match yerr {
+                    ErrorBarData::Symmetric(e) => (yv - e[i], yv + e[i]),
+                    ErrorBarData::Asymmetric { low, high } => (yv - low[i], yv + high[i]),
+                };
+                let pt_lo = self.data_to_pixel(xv, lo, plot_area, xmin, xmax, ymin, ymax);
+                let pt_hi = self.data_to_pixel(xv, hi, plot_area, xmin, xmax, ymin, ymax);
+
+                // Vertical bar.
+                let mut bar = Path::new();
+                bar.move_to(pt_lo.x, pt_lo.y);
+                bar.line_to(pt_hi.x, pt_hi.y);
+                renderer.stroke_path(&bar, &paint, &stroke, Affine::IDENTITY);
+
+                // Caps.
+                if artist.cap_size > 0.0 {
+                    let half_cap = artist.cap_size / 2.0;
+                    let mut cap_lo = Path::new();
+                    cap_lo.move_to(pt_lo.x - half_cap, pt_lo.y);
+                    cap_lo.line_to(pt_lo.x + half_cap, pt_lo.y);
+                    renderer.stroke_path(&cap_lo, &paint, &stroke, Affine::IDENTITY);
+
+                    let mut cap_hi = Path::new();
+                    cap_hi.move_to(pt_hi.x - half_cap, pt_hi.y);
+                    cap_hi.line_to(pt_hi.x + half_cap, pt_hi.y);
+                    renderer.stroke_path(&cap_hi, &paint, &stroke, Affine::IDENTITY);
+                }
+            }
+
+            // Horizontal error bars (xerr).
+            if let Some(ref xerr) = artist.xerr {
+                let (lo, hi) = match xerr {
+                    ErrorBarData::Symmetric(e) => (xv - e[i], xv + e[i]),
+                    ErrorBarData::Asymmetric { low, high } => (xv - low[i], xv + high[i]),
+                };
+                let pt_lo = self.data_to_pixel(lo, yv, plot_area, xmin, xmax, ymin, ymax);
+                let pt_hi = self.data_to_pixel(hi, yv, plot_area, xmin, xmax, ymin, ymax);
+
+                // Horizontal bar.
+                let mut bar = Path::new();
+                bar.move_to(pt_lo.x, pt_lo.y);
+                bar.line_to(pt_hi.x, pt_hi.y);
+                renderer.stroke_path(&bar, &paint, &stroke, Affine::IDENTITY);
+
+                // Caps.
+                if artist.cap_size > 0.0 {
+                    let half_cap = artist.cap_size / 2.0;
+                    let mut cap_lo = Path::new();
+                    cap_lo.move_to(pt_lo.x, pt_lo.y - half_cap);
+                    cap_lo.line_to(pt_lo.x, pt_lo.y + half_cap);
+                    renderer.stroke_path(&cap_lo, &paint, &stroke, Affine::IDENTITY);
+
+                    let mut cap_hi = Path::new();
+                    cap_hi.move_to(pt_hi.x, pt_hi.y - half_cap);
+                    cap_hi.line_to(pt_hi.x, pt_hi.y + half_cap);
+                    renderer.stroke_path(&cap_hi, &paint, &stroke, Affine::IDENTITY);
+                }
+            }
+        }
+    }
+
+    /// Draws a heatmap: fills rectangles for each cell, colored via the
+    /// configured colormap. Optionally draws cell value text.
+    fn draw_heatmap(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &HeatmapArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        let nrows = artist.data.len();
+        if nrows == 0 {
+            return;
+        }
+        let ncols = artist.data[0].len();
+        if ncols == 0 {
+            return;
+        }
+
+        let vmin = artist.effective_vmin();
+        let vmax = artist.effective_vmax();
+
+        let text_style = TextStyle {
+            size: 10.0,
+            color: Color::BLACK,
+            weight: FontWeight::Normal,
+            family: None,
+            halign: HAlign::Center,
+            valign: VAlign::Middle,
+        };
+
+        for row in 0..nrows {
+            for col in 0..ncols {
+                let val = artist.data[row][col];
+                let cell_color = artist.cmap.map_value(val, vmin, vmax);
+
+                // Cell rectangle in data space: col..col+1 on x, row..row+1 on y.
+                let p_bl = self.data_to_pixel(
+                    col as f64, row as f64,
+                    plot_area, xmin, xmax, ymin, ymax,
+                );
+                let p_tr = self.data_to_pixel(
+                    (col + 1) as f64, (row + 1) as f64,
+                    plot_area, xmin, xmax, ymin, ymax,
+                );
+                let rect = Rect::from_points(p_bl, p_tr);
+                let cell_path = Path::rect(rect);
+                renderer.fill_path(&cell_path, &Paint::new(cell_color), Affine::IDENTITY);
+
+                // Optional value text.
+                if artist.show_values {
+                    let cx = (p_bl.x + p_tr.x) / 2.0;
+                    let cy = (p_bl.y + p_tr.y) / 2.0;
+                    let label = format!("{val:.1}");
+                    renderer.draw_text(
+                        &label,
+                        Point::new(cx, cy),
+                        &text_style,
+                        Affine::IDENTITY,
+                    );
+                }
+            }
+        }
+    }
+
     fn draw_legend(
         &self,
         renderer: &mut impl Renderer,
@@ -1301,6 +1968,11 @@ impl Axes {
                     Artist::Bar(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Histogram(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::FillBetween(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Step(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
+                    Artist::Stem(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::BoxPlot(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::ErrorBar(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
+                    Artist::Heatmap(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                 };
                 label.map(|l| LegendEntry { label: l.to_string(), color, swatch })
             })
@@ -1569,4 +2241,233 @@ mod tests {
         assert!(ymin < 2.0);
         assert!(ymax > 8.0);
     }
+    // -- Step chart tests ---------------------------------------------------
+
+    #[test]
+    fn step_creates_artist() {
+        let mut ax = Axes::new();
+        let result = ax.step(vec![1.0, 2.0, 3.0], vec![1.0, 3.0, 2.0]);
+        assert!(result.is_ok());
+        assert!(matches!(&ax.artists[0], Artist::Step(_)));
+    }
+
+    #[test]
+    fn step_length_mismatch() {
+        let mut ax = Axes::new();
+        let result = ax.step(vec![1.0, 2.0], vec![1.0]);
+        assert!(matches!(result, Err(PlotError::SeriesLengthMismatch { .. })));
+    }
+
+    #[test]
+    fn step_empty_data() {
+        let mut ax = Axes::new();
+        let result = ax.step(Vec::<f64>::new(), Vec::<f64>::new());
+        assert!(matches!(result, Err(PlotError::EmptyData)));
+    }
+
+    #[test]
+    fn step_default_where() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        match &ax.artists[0] {
+            Artist::Step(a) => assert!(matches!(a.where_step, StepWhere::Pre)),
+            _ => panic!("expected Step"),
+        }
+    }
+
+    #[test]
+    fn step_color_cycle() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        ax.step(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        let c0 = ax.artists[0].color();
+        let c1 = ax.artists[1].color();
+        assert_ne!(c0, c1);
+    }
+
+    #[test]
+    fn step_builder_chaining() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 2.0, 3.0], vec![1.0, 3.0, 2.0])
+            .unwrap()
+            .color(Color::TAB_RED)
+            .width(3.0)
+            .where_step(StepWhere::Post)
+            .label("steps")
+            .alpha(0.5);
+        match &ax.artists[0] {
+            Artist::Step(a) => {
+                assert_eq!(a.color, Color::TAB_RED);
+                assert!((a.width - 3.0).abs() < 1e-12);
+                assert!(matches!(a.where_step, StepWhere::Post));
+                assert_eq!(a.label.as_deref(), Some("steps"));
+                assert!((a.alpha - 0.5).abs() < 1e-12);
+            }
+            _ => panic!("expected Step"),
+        }
+    }
+
+    #[test]
+    fn step_data_bounds() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 5.0, 10.0], vec![2.0, 8.0, 3.0]).unwrap();
+        let (xmin, xmax, ymin, ymax) = ax.compute_data_limits();
+        assert!(xmin < 1.0);
+        assert!(xmax > 10.0);
+        assert!(ymin < 2.0);
+        assert!(ymax > 8.0);
+    }
+
+    #[test]
+    fn step_legend_label() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap().label("S");
+        assert_eq!(ax.artists[0].label(), Some("S"));
+    }
+
+    #[test]
+    fn step_default_alpha() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        match &ax.artists[0] {
+            Artist::Step(a) => assert!((a.alpha - 1.0).abs() < 1e-12),
+            _ => panic!("expected Step"),
+        }
+    }
+
+    #[test]
+    fn step_default_width() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        match &ax.artists[0] {
+            Artist::Step(a) => assert!((a.width - 1.5).abs() < 1e-12),
+            _ => panic!("expected Step"),
+        }
+    }
+
+    #[test]
+    fn step_mid_mode() {
+        let mut ax = Axes::new();
+        ax.step(vec![1.0, 2.0, 3.0], vec![1.0, 3.0, 2.0])
+            .unwrap()
+            .where_step(StepWhere::Mid);
+        match &ax.artists[0] {
+            Artist::Step(a) => assert!(matches!(a.where_step, StepWhere::Mid)),
+            _ => panic!("expected Step"),
+        }
+    }
+
+    // -- Stem chart tests ---------------------------------------------------
+
+    #[test]
+    fn stem_creates_artist() {
+        let mut ax = Axes::new();
+        let result = ax.stem(vec![1.0, 2.0, 3.0], vec![1.0, 3.0, 2.0]);
+        assert!(result.is_ok());
+        assert!(matches!(&ax.artists[0], Artist::Stem(_)));
+    }
+
+    #[test]
+    fn stem_length_mismatch() {
+        let mut ax = Axes::new();
+        let result = ax.stem(vec![1.0, 2.0], vec![1.0]);
+        assert!(matches!(result, Err(PlotError::SeriesLengthMismatch { .. })));
+    }
+
+    #[test]
+    fn stem_empty_data() {
+        let mut ax = Axes::new();
+        let result = ax.stem(Vec::<f64>::new(), Vec::<f64>::new());
+        assert!(matches!(result, Err(PlotError::EmptyData)));
+    }
+
+    #[test]
+    fn stem_default_baseline() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        match &ax.artists[0] {
+            Artist::Stem(a) => assert!((a.baseline - 0.0).abs() < 1e-12),
+            _ => panic!("expected Stem"),
+        }
+    }
+
+    #[test]
+    fn stem_default_marker_size() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        match &ax.artists[0] {
+            Artist::Stem(a) => assert!((a.marker_size - 6.0).abs() < 1e-12),
+            _ => panic!("expected Stem"),
+        }
+    }
+
+    #[test]
+    fn stem_builder_chaining() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 2.0, 3.0], vec![1.0, 3.0, 2.0])
+            .unwrap()
+            .color(Color::TAB_GREEN)
+            .baseline(1.0)
+            .marker_size(8.0)
+            .width(2.0)
+            .label("stems")
+            .alpha(0.7);
+        match &ax.artists[0] {
+            Artist::Stem(a) => {
+                assert_eq!(a.color, Color::TAB_GREEN);
+                assert!((a.baseline - 1.0).abs() < 1e-12);
+                assert!((a.marker_size - 8.0).abs() < 1e-12);
+                assert!((a.line_width - 2.0).abs() < 1e-12);
+                assert_eq!(a.label.as_deref(), Some("stems"));
+                assert!((a.alpha - 0.7).abs() < 1e-12);
+            }
+            _ => panic!("expected Stem"),
+        }
+    }
+
+    #[test]
+    fn stem_data_bounds_include_baseline() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 5.0], vec![2.0, 8.0]).unwrap().baseline(-5.0);
+        let (xmin, xmax, ymin, ymax) = ax.compute_data_limits();
+        assert!(ymin < -5.0);
+    }
+
+    #[test]
+    fn stem_legend_label() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap().label("L");
+        assert_eq!(ax.artists[0].label(), Some("L"));
+    }
+
+    #[test]
+    fn stem_color_cycle() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        let c0 = ax.artists[0].color();
+        let c1 = ax.artists[1].color();
+        assert_ne!(c0, c1);
+    }
+
+    #[test]
+    fn stem_alpha_default() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap();
+        match &ax.artists[0] {
+            Artist::Stem(a) => assert!((a.alpha - 1.0).abs() < 1e-12),
+            _ => panic!("expected Stem"),
+        }
+    }
+
+    #[test]
+    fn stem_negative_baseline() {
+        let mut ax = Axes::new();
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap().baseline(-3.0);
+        match &ax.artists[0] {
+            Artist::Stem(a) => assert!((a.baseline - (-3.0)).abs() < 1e-12),
+            _ => panic!("expected Stem"),
+        }
+    }
+
 }

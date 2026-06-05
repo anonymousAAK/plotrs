@@ -23,6 +23,8 @@
 //! [`Histogram`]: Artist::Histogram
 //! [`FillBetween`]: Artist::FillBetween
 
+use crate::charts::boxplot::BoxStats;
+use crate::colormap::Colormap;
 use crate::primitives::Color;
 use crate::series::{Categories, Series};
 use crate::theme::{LineStyle, Marker};
@@ -50,7 +52,19 @@ pub enum Artist {
     Histogram(HistArtist),
     /// A filled region between two y-series sharing a common x-series.
     FillBetween(FillBetweenArtist),
+    /// A step (staircase) chart connecting data points.
+    Step(StepArtist),
+    /// A stem (lollipop) chart from data points.
+    Stem(StemArtist),
+    /// A box-and-whisker plot showing distribution summaries.
+    BoxPlot(BoxPlotArtist),
+    /// An error bar plot showing data points with uncertainty bars.
+    ErrorBar(ErrorBarArtist),
+    /// A heatmap showing a 2D grid of values mapped to colors.
+    Heatmap(HeatmapArtist),
 }
+
+
 
 impl Artist {
     /// Returns the legend label for this artist, if one has been set.
@@ -64,6 +78,11 @@ impl Artist {
             Artist::Bar(a) => a.label.as_deref(),
             Artist::Histogram(a) => a.label.as_deref(),
             Artist::FillBetween(a) => a.label.as_deref(),
+            Artist::Step(a) => a.label.as_deref(),
+            Artist::Stem(a) => a.label.as_deref(),
+            Artist::BoxPlot(a) => a.label.as_deref(),
+            Artist::ErrorBar(a) => a.label.as_deref(),
+            Artist::Heatmap(a) => a.label.as_deref(),
         }
     }
 
@@ -79,6 +98,11 @@ impl Artist {
             Artist::Bar(a) => a.color,
             Artist::Histogram(a) => a.color,
             Artist::FillBetween(a) => a.color,
+            Artist::Step(a) => a.color,
+            Artist::Stem(a) => a.color,
+            Artist::BoxPlot(a) => a.color,
+            Artist::ErrorBar(a) => a.color,
+            Artist::Heatmap(a) => a.color,
         }
     }
 
@@ -96,6 +120,11 @@ impl Artist {
             Artist::Bar(a) => a.data_bounds(),
             Artist::Histogram(a) => a.data_bounds(),
             Artist::FillBetween(a) => a.data_bounds(),
+            Artist::Step(a) => a.data_bounds(),
+            Artist::Stem(a) => a.data_bounds(),
+            Artist::BoxPlot(a) => a.data_bounds(),
+            Artist::ErrorBar(a) => a.data_bounds(),
+            Artist::Heatmap(a) => a.data_bounds(),
         }
     }
 }
@@ -183,6 +212,13 @@ pub struct ScatterArtist {
     /// When set, `colors.len()` must equal `x.len()` (and `y.len()`). Each
     /// entry overrides `color` for the corresponding data point.
     pub colors: Option<Vec<Color>>,
+    /// Optional per-point scalar values for colormap-driven coloring.
+    ///
+    /// When set together with `cmap`, each value is mapped through the
+    /// colormap to produce per-point colors. Takes precedence over `colors`.
+    pub c: Option<Vec<f64>>,
+    /// Optional colormap used to map `c` values to colors.
+    pub cmap: Option<Colormap>,
 }
 
 impl ScatterArtist {
@@ -383,6 +419,293 @@ impl FillBetweenArtist {
 }
 
 // ---------------------------------------------------------------------------
+// BoxPlotArtist
+// ---------------------------------------------------------------------------
+
+/// A box-and-whisker plot showing distribution summaries for one or more
+/// groups of data.
+///
+/// Each group produces a box spanning Q1 to Q3 with a median line, whiskers
+/// extending to the most extreme data points within the configured fence, and
+/// optional outlier dots beyond the whiskers.
+#[derive(Debug, Clone)]
+pub struct BoxPlotArtist {
+    /// Pre-computed summary statistics for each group.
+    pub stats: Vec<BoxStats>,
+    /// Category labels for the x-axis (one per group).
+    pub labels: Vec<String>,
+    /// Fill color of the boxes.
+    pub color: Color,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+    pub alpha: f64,
+    /// Box width as a fraction of the category spacing.
+    pub box_width: f64,
+    /// Whether to draw outlier dots.
+    pub show_outliers: bool,
+    /// Whisker extent as a multiple of IQR.
+    pub whisker_iq_factor: f64,
+    /// Raw data retained for re-computing stats when parameters change.
+    pub raw_data: Vec<Vec<f64>>,
+}
+
+impl BoxPlotArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// The x-axis spans from `-0.5` to `n - 0.5` (where `n` is the number
+    /// of groups), centering each box on an integer position. The y-axis
+    /// spans from the lowest whisker (or outlier) to the highest.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        let n = self.stats.len();
+        if n == 0 {
+            return (0.0, 1.0, 0.0, 1.0);
+        }
+        let xmin = -0.5;
+        let xmax = n as f64 - 0.5;
+        let mut ymin = f64::INFINITY;
+        let mut ymax = f64::NEG_INFINITY;
+        for s in &self.stats {
+            ymin = ymin.min(s.whisker_low);
+            ymax = ymax.max(s.whisker_high);
+            for &o in &s.outliers {
+                ymin = ymin.min(o);
+                ymax = ymax.max(o);
+            }
+        }
+        if !ymin.is_finite() {
+            ymin = 0.0;
+        }
+        if !ymax.is_finite() {
+            ymax = 1.0;
+        }
+        (xmin, xmax, ymin, ymax)
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// ErrorBarData
+// ---------------------------------------------------------------------------
+
+/// The error data for one axis of an error bar plot.
+///
+/// Symmetric errors apply the same magnitude on both sides of the data point.
+/// Asymmetric errors allow separate low and high magnitudes.
+#[derive(Debug, Clone)]
+pub enum ErrorBarData {
+    /// Equal error on both sides: `y - e` to `y + e`.
+    Symmetric(Vec<f64>),
+    /// Separate low and high errors: `y - low[i]` to `y + high[i]`.
+    Asymmetric {
+        /// Error magnitudes below each data point.
+        low: Vec<f64>,
+        /// Error magnitudes above each data point.
+        high: Vec<f64>,
+    },
+}
+
+// ---------------------------------------------------------------------------
+// ErrorBarArtist
+// ---------------------------------------------------------------------------
+
+/// An error bar plot showing data points with uncertainty bars.
+///
+/// Each data point `(x, y)` can have optional horizontal (`xerr`) and/or
+/// vertical (`yerr`) error bars. The error bars are drawn as lines with
+/// optional caps at the ends.
+#[derive(Debug, Clone)]
+pub struct ErrorBarArtist {
+    /// X-coordinates of the data points.
+    pub x: Series,
+    /// Y-coordinates of the data points.
+    pub y: Series,
+    /// Optional x-axis error data.
+    pub xerr: Option<ErrorBarData>,
+    /// Optional y-axis error data.
+    pub yerr: Option<ErrorBarData>,
+    /// Color for the center line, error bars, and caps.
+    pub color: Color,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Cap size in pixels for the error bar ends.
+    pub cap_size: f64,
+    /// Stroke width of the error bar lines and caps.
+    pub line_width: f64,
+}
+
+impl ErrorBarArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// Includes the extent of error bars when present, so that auto-scaling
+    /// shows the full error range.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        let (mut xmin, mut xmax) = series_bounds_or(&self.x, 0.0, 1.0);
+        let (mut ymin, mut ymax) = series_bounds_or(&self.y, 0.0, 1.0);
+
+        // Expand x-bounds by xerr.
+        if let Some(ref xerr) = self.xerr {
+            for i in 0..self.x.len() {
+                let xv = self.x.data[i];
+                let (lo, hi) = match xerr {
+                    ErrorBarData::Symmetric(e) => (xv - e[i], xv + e[i]),
+                    ErrorBarData::Asymmetric { low, high } => (xv - low[i], xv + high[i]),
+                };
+                xmin = xmin.min(lo);
+                xmax = xmax.max(hi);
+            }
+        }
+
+        // Expand y-bounds by yerr.
+        if let Some(ref yerr) = self.yerr {
+            for i in 0..self.y.len() {
+                let yv = self.y.data[i];
+                let (lo, hi) = match yerr {
+                    ErrorBarData::Symmetric(e) => (yv - e[i], yv + e[i]),
+                    ErrorBarData::Asymmetric { low, high } => (yv - low[i], yv + high[i]),
+                };
+                ymin = ymin.min(lo);
+                ymax = ymax.max(hi);
+            }
+        }
+
+        (xmin, xmax, ymin, ymax)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HeatmapArtist
+// ---------------------------------------------------------------------------
+
+/// A heatmap showing a 2D grid of values mapped to colors via a colormap.
+///
+/// Each cell in the grid is filled with a color determined by mapping its
+/// value through the configured [`Colormap`]. Optional text annotations
+/// can display the numeric value inside each cell.
+#[derive(Debug, Clone)]
+pub struct HeatmapArtist {
+    /// Row-major grid of values. `data[row][col]`.
+    pub data: Vec<Vec<f64>>,
+    /// Optional column labels for the x-axis.
+    pub x_labels: Option<Vec<String>>,
+    /// Optional row labels for the y-axis.
+    pub y_labels: Option<Vec<String>>,
+    /// Colormap used to map cell values to colors.
+    pub cmap: Colormap,
+    /// Minimum value for colormap normalisation. `None` means auto.
+    pub vmin: Option<f64>,
+    /// Maximum value for colormap normalisation. `None` means auto.
+    pub vmax: Option<f64>,
+    /// Whether to draw cell values as text.
+    pub show_values: bool,
+    /// Primary color (used for legend swatch).
+    pub color: Color,
+    /// Optional legend label.
+    pub label: Option<String>,
+}
+
+impl HeatmapArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// The grid spans from `(0, 0)` to `(ncols, nrows)`. Returns
+    /// `(0.0, 1.0, 0.0, 1.0)` when the data is empty.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        let nrows = self.data.len();
+        if nrows == 0 {
+            return (0.0, 1.0, 0.0, 1.0);
+        }
+        let ncols = self.data[0].len();
+        if ncols == 0 {
+            return (0.0, 1.0, 0.0, 1.0);
+        }
+        (0.0, ncols as f64, 0.0, nrows as f64)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// StepWhere
+// ---------------------------------------------------------------------------
+
+/// Controls where the horizontal segment of a step chart is placed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepWhere {
+    /// The y-value changes *before* the x-value (vertical then horizontal).
+    Pre,
+    /// The y-value changes *after* the x-value (horizontal then vertical).
+    Post,
+    /// The y-value changes at the midpoint between consecutive x-values.
+    Mid,
+}
+
+// ---------------------------------------------------------------------------
+// StepArtist
+// ---------------------------------------------------------------------------
+
+/// A step (staircase) chart.
+#[derive(Debug, Clone)]
+pub struct StepArtist {
+    /// X-coordinates of the data points.
+    pub x: Series,
+    /// Y-coordinates of the data points.
+    pub y: Series,
+    /// Stroke color of the step line.
+    pub color: Color,
+    /// Stroke width in pixels.
+    pub width: f64,
+    /// Step alignment mode.
+    pub where_step: StepWhere,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+    pub alpha: f64,
+}
+
+impl StepArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        let (xmin, xmax) = series_bounds_or(&self.x, 0.0, 1.0);
+        let (ymin, ymax) = series_bounds_or(&self.y, 0.0, 1.0);
+        (xmin, xmax, ymin, ymax)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// StemArtist
+// ---------------------------------------------------------------------------
+
+/// A stem (lollipop) chart.
+#[derive(Debug, Clone)]
+pub struct StemArtist {
+    /// X-coordinates of the data points.
+    pub x: Series,
+    /// Y-coordinates of the data points.
+    pub y: Series,
+    /// Color of the stem lines and markers.
+    pub color: Color,
+    /// Stroke width of the stem lines in pixels.
+    pub line_width: f64,
+    /// Diameter of the marker circle in pixels.
+    pub marker_size: f64,
+    /// The y-value from which stems originate.
+    pub baseline: f64,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+    pub alpha: f64,
+}
+
+impl StemArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// The y-bounds include the baseline.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        let (xmin, xmax) = series_bounds_or(&self.x, 0.0, 1.0);
+        let (ymin, ymax) = series_bounds_or(&self.y, 0.0, 1.0);
+        (xmin, xmax, ymin.min(self.baseline), ymax.max(self.baseline))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -414,6 +737,8 @@ mod tests {
             label: None,
             alpha: 0.8,
             colors: None,
+            c: None,
+            cmap: None,
         }
     }
 
@@ -549,6 +874,8 @@ mod tests {
             label: None,
             alpha: 1.0,
             colors: None,
+            c: None,
+            cmap: None,
         };
         assert_eq!(a.data_bounds(), (0.0, 1.0, 0.0, 1.0));
     }

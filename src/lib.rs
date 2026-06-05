@@ -31,7 +31,10 @@
 
 #![deny(missing_docs)]
 
-pub use plotkit_core::{primitives, renderer, error, series, scale, ticks, theme, layout, artist, axes, figure, legend, charts};
+#[cfg(feature = "jupyter")]
+pub mod jupyter;
+
+pub use plotkit_core::{primitives, renderer, error, series, scale, ticks, theme, layout, artist, axes, figure, legend, charts, colormap};
 pub use plotkit_core::figure::Figure;
 pub use plotkit_core::axes::Axes;
 pub use plotkit_core::primitives::Color;
@@ -50,7 +53,7 @@ thread_local! {
 /// The plotkit prelude — import this for convenient access to all common types.
 pub mod prelude {
     pub use plotkit_core::prelude::*;
-    pub use crate::{plot, scatter, bar, hist, title, xlabel, ylabel, legend, savefig, clf};
+    pub use crate::{plot, scatter, bar, hist, title, xlabel, ylabel, legend, savefig, clf, subplots};
     pub use crate::FigureExt;
 }
 
@@ -153,6 +156,13 @@ pub fn savefig(path: impl AsRef<Path>) -> Result<()> {
     CURRENT_FIGURE.with(|fig| {
         let fig = fig.borrow();
         save_figure(&fig, path.as_ref())
+    })
+}
+
+/// Replaces the current figure with an `nrows × ncols` subplot grid.
+pub fn subplots(nrows: usize, ncols: usize) {
+    CURRENT_FIGURE.with(|fig| {
+        *fig.borrow_mut() = Figure::subplots(nrows, ncols);
     })
 }
 

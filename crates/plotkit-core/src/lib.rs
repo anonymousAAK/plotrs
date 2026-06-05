@@ -22,6 +22,7 @@ pub mod axes;
 pub mod figure;
 pub mod legend;
 pub mod charts;
+pub mod colormap;
 
 /// The plotkit-core prelude — import common types with a single `use` statement.
 pub mod prelude {
@@ -32,4 +33,5 @@ pub mod prelude {
     pub use crate::scale::Scale;
     pub use crate::series::{IntoSeries, IntoCategories};
     pub use crate::theme::{Theme, LineStyle, Marker, Loc};
+    pub use crate::colormap::Colormap;
 }

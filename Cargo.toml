@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "plotkit"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 description = "A matplotlib-shaped, publication-quality plotting library for Rust"
@@ -17,14 +17,16 @@ keywords = ["plotting", "chart", "visualization", "svg", "matplotlib"]
 categories = ["visualization", "science", "multimedia::images"]
 
 [dependencies]
-plotkit-core = { path = "crates/plotkit-core", version = "0.1.1" }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.1" }
-plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.1.1", optional = true }
+plotkit-core = { path = "crates/plotkit-core", version = "0.2.0" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.2.0" }
+plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.2.0", optional = true }
+base64 = { version = "0.22", optional = true }
 
 [features]
 default = ["png", "svg"]
 png = []
 svg = ["dep:plotkit-render-svg"]
+jupyter = ["png", "dep:base64"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -50,6 +52,35 @@ path = "examples/04_histogram.rs"
 name = "05_fill_between"
 path = "examples/05_fill_between.rs"
 
+[[example]]
+name = "06_errorbar"
+path = "examples/06_errorbar.rs"
+
+[[example]]
+name = "07_boxplot"
+path = "examples/07_boxplot.rs"
+
+[[example]]
+name = "08_step"
+path = "examples/08_step.rs"
+
+[[example]]
+name = "09_stem"
+path = "examples/09_stem.rs"
+
+[[example]]
+name = "10_heatmap"
+path = "examples/10_heatmap.rs"
+
+[[example]]
+name = "11_colormap_scatter"
+path = "examples/11_colormap_scatter.rs"
+
 [dev-dependencies]
 insta = { version = "1", features = ["glob"] }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0" }
+criterion = { version = "0.5", features = ["html_reports"] }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.2.0" }
+
+[[bench]]
+name = "render_benchmarks"
+harness = false

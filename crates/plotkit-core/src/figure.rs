@@ -207,6 +207,44 @@ impl Figure {
         self.axes.len()
     }
 
+    /// Creates a new figure with an `nrows × ncols` subplot grid.
+    ///
+    /// Axes are added in row-major order (index 0 = top-left). Access them
+    /// via `fig.axes_mut(index)` where index goes from 0 to `nrows*ncols - 1`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `nrows` or `ncols` is zero.
+    pub fn subplots(nrows: usize, ncols: usize) -> Self {
+        assert!(nrows > 0 && ncols > 0, "subplots: nrows and ncols must be > 0");
+        let mut fig = Self::new();
+        for i in 1..=(nrows * ncols) {
+            fig.add_subplot(nrows, ncols, i);
+        }
+        fig
+    }
+
+    /// Creates a new figure with an `nrows × ncols` subplot grid and custom size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `nrows` or `ncols` is zero.
+    pub fn subplots_with_size(nrows: usize, ncols: usize, width: u32, height: u32) -> Self {
+        assert!(nrows > 0 && ncols > 0, "subplots: nrows and ncols must be > 0");
+        let mut fig = Self::with_size(width, height);
+        for i in 1..=(nrows * ncols) {
+            fig.add_subplot(nrows, ncols, i);
+        }
+        fig
+    }
+
+    /// 2D indexing into the subplot grid.
+    ///
+    /// Returns `axes_mut(row * ncols + col)`, or `None` if out of bounds.
+    pub fn axes_grid(&mut self, row: usize, col: usize, ncols: usize) -> Option<&mut Axes> {
+        self.axes_mut(row * ncols + col)
+    }
+
     // -----------------------------------------------------------------------
     // Rendering
     // -----------------------------------------------------------------------

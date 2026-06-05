@@ -15,6 +15,7 @@
 //! ```
 
 use crate::artist::ScatterArtist;
+use crate::colormap::Colormap;
 use crate::primitives::Color;
 use crate::theme::Marker;
 
@@ -139,6 +140,47 @@ impl ScatterArtist {
     /// ```
     pub fn colors(&mut self, colors: Vec<Color>) -> &mut Self {
         self.colors = Some(colors);
+        self
+    }
+
+    /// Sets per-point scalar values for colormap-driven coloring.
+    ///
+    /// When combined with [`cmap`](Self::cmap), each scalar value is mapped
+    /// through the colormap to produce a per-point color. The length of `c`
+    /// must equal the number of data points. This takes precedence over
+    /// both the uniform [`color`](Self::color) and [`colors`](Self::colors).
+    ///
+    /// # Arguments
+    ///
+    /// * `c` - A vector of scalar values, one per data point.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// artist.c(vec![0.0, 0.5, 1.0]).cmap(Colormap::Viridis);
+    /// ```
+    pub fn c(&mut self, c: Vec<f64>) -> &mut Self {
+        self.c = Some(c);
+        self
+    }
+
+    /// Sets the colormap used to map `c` values to colors.
+    ///
+    /// Must be used together with [`c`](Self::c) to have any effect. When
+    /// both are set, the scatter plot renders each point with a color
+    /// determined by mapping its `c` value through the given colormap.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmap` - The [`Colormap`] variant to use.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// artist.c(values).cmap(Colormap::Plasma);
+    /// ```
+    pub fn cmap(&mut self, cmap: Colormap) -> &mut Self {
+        self.cmap = Some(cmap);
         self
     }
 }

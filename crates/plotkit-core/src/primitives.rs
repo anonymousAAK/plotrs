@@ -183,7 +183,7 @@ impl Color {
 // ---------------------------------------------------------------------------
 
 /// Describes how a filled region should be painted.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Paint {
     /// The fill color.
     pub color: Color,

@@ -12,10 +12,28 @@ use cosmic_text::{
 use plotkit_core::primitives::*;
 use plotkit_core::renderer::Renderer;
 
+/// The default font family name embedded in the binary.
+pub const DEFAULT_FONT_FAMILY: &str = "Inter";
+
+const DEFAULT_FONT_REGULAR: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
+const DEFAULT_FONT_BOLD: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
+
+/// Creates a `FontSystem` loaded only with the embedded Inter font.
+///
+/// This avoids system font discovery for deterministic cross-platform rendering.
+fn embedded_font_system() -> FontSystem {
+    let mut db = cosmic_text::fontdb::Database::new();
+    db.load_font_data(DEFAULT_FONT_REGULAR.to_vec());
+    db.load_font_data(DEFAULT_FONT_BOLD.to_vec());
+    db.set_sans_serif_family(DEFAULT_FONT_FAMILY);
+    FontSystem::new_with_locale_and_db("en-US".into(), db)
+}
+
 /// A renderer that produces PNG output via tiny-skia CPU rasterization.
 ///
 /// Text is rendered using cosmic-text for shaping/layout and swash for glyph
-/// rasterization. The `FontSystem` discovers system fonts automatically.
+/// rasterization. The embedded Inter font ensures deterministic rendering
+/// across all platforms.
 ///
 /// `FontSystem` is wrapped in `RefCell` so that `measure_text` (which receives
 /// `&self` per the `Renderer` trait) can still perform shaping.
@@ -23,13 +41,13 @@ pub struct SkiaRenderer {
     pixmap: tiny_skia::Pixmap,
     font_system: RefCell<FontSystem>,
     swash_cache: SwashCache,
+    clip_stack: Vec<tiny_skia::Mask>,
 }
 
 impl SkiaRenderer {
     /// Creates a new renderer with the given dimensions.
     ///
-    /// Initialises the font system with system font discovery and creates a
-    /// swash glyph cache for rasterisation.
+    /// Uses the embedded Inter font for deterministic cross-platform text.
     ///
     /// # Panics
     ///
@@ -38,12 +56,13 @@ impl SkiaRenderer {
     pub fn new(width: u32, height: u32) -> Self {
         let pixmap =
             tiny_skia::Pixmap::new(width, height).expect("failed to create pixmap");
-        let font_system = RefCell::new(FontSystem::new());
+        let font_system = RefCell::new(embedded_font_system());
         let swash_cache = SwashCache::new();
         Self {
             pixmap,
             font_system,
             swash_cache,
+            clip_stack: Vec::new(),
         }
     }
 
@@ -173,7 +192,7 @@ impl Renderer for SkiaRenderer {
             &sk_paint,
             tiny_skia::FillRule::Winding,
             sk_transform,
-            None,
+            self.clip_stack.last(),
         );
     }
 
@@ -196,7 +215,7 @@ impl Renderer for SkiaRenderer {
             &sk_paint,
             &sk_stroke,
             sk_transform,
-            None,
+            self.clip_stack.last(),
         );
     }
 
@@ -335,18 +354,34 @@ impl Renderer for SkiaRenderer {
             src_pixmap.as_ref(),
             &paint,
             sk_transform,
-            None,
+            self.clip_stack.last(),
         );
     }
 
-    fn push_clip(&mut self, _path: &Path, _transform: Affine) {
-        // Clipping is not yet implemented in v0.1.
-        // tiny-skia supports clip masks but full clip-stack management
-        // will be added in a future release.
+    fn push_clip(&mut self, path: &Path, transform: Affine) {
+        let w = self.pixmap.width();
+        let h = self.pixmap.height();
+        let mut mask = tiny_skia::Mask::new(w, h).expect("failed to create clip mask");
+
+        if let Some(sk_path) = convert_path(path) {
+            let sk_transform = convert_transform(transform);
+            mask.fill_path(&sk_path, tiny_skia::FillRule::Winding, true, sk_transform);
+        }
+
+        // Intersect with parent mask if one exists.
+        if let Some(parent) = self.clip_stack.last() {
+            let mask_data = mask.data_mut();
+            let parent_data = parent.data();
+            for (m, &p) in mask_data.iter_mut().zip(parent_data.iter()) {
+                *m = (*m as u32 * p as u32 / 255) as u8;
+            }
+        }
+
+        self.clip_stack.push(mask);
     }
 
     fn pop_clip(&mut self) {
-        // See push_clip -- not yet implemented in v0.1.
+        self.clip_stack.pop();
     }
 
     fn measure_text(&self, text: &str, style: &TextStyle) -> (f64, f64) {
