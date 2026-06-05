@@ -235,7 +235,7 @@ impl Figure {
         );
 
         // ----- 2. Draw suptitle if set -------------------------------------
-        let _top_offset = if let Some(ref title) = self.suptitle {
+        let top_offset = if let Some(ref title) = self.suptitle {
             let style = TextStyle {
                 size: theme.title_size + 2.0, // suptitle slightly larger than axes title
                 color: theme.text_color,
@@ -254,15 +254,23 @@ impl Figure {
         };
 
         // ----- 3. Compute subplot layout -----------------------------------
+        // Reduce the available height by the suptitle offset so that subplots
+        // are laid out below the suptitle instead of overlapping it.
         let grid = self.subplot_grid.unwrap_or((1, 1));
         let rects = layout::compute_subplot_rects(
             fw,
-            fh,
+            fh - top_offset,
             grid.0,
             grid.1,
             DEFAULT_MARGIN,
             DEFAULT_GAP,
-        );
+        )
+        .into_iter()
+        .map(|mut r| {
+            r.y += top_offset;
+            r
+        })
+        .collect::<Vec<_>>();
 
         // ----- 4. Render each axes -----------------------------------------
         for (i, axes) in self.axes.iter().enumerate() {

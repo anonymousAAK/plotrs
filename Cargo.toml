@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "plotkit"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.75"
 description = "A matplotlib-shaped, publication-quality plotting library for Rust"
@@ -17,9 +17,9 @@ keywords = ["plotting", "chart", "visualization", "svg", "matplotlib"]
 categories = ["visualization", "science", "multimedia::images"]
 
 [dependencies]
-plotkit-core = { path = "crates/plotkit-core", version = "0.1.0" }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0" }
-plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.1.0", optional = true }
+plotkit-core = { path = "crates/plotkit-core", version = "0.1.1" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.1" }
+plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.1.1", optional = true }
 
 [features]
 default = ["png", "svg"]

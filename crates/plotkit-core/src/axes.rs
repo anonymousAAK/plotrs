@@ -8,6 +8,7 @@
 use crate::artist::*;
 use crate::error::{PlotError, Result};
 use crate::layout::{self, LayoutConfig};
+use crate::legend::{self, LegendEntry, SwatchKind};
 use crate::primitives::*;
 use crate::renderer::Renderer;
 use crate::scale::Scale;
@@ -139,7 +140,7 @@ impl Axes {
             alpha: 1.0,
         };
         self.artists.push(Artist::Line(artist));
-        match self.artists.last_mut().unwrap() {
+        match self.artists.last_mut().expect("just pushed") {
             Artist::Line(a) => Ok(a),
             _ => unreachable!(),
         }
@@ -182,7 +183,7 @@ impl Axes {
             colors: None,
         };
         self.artists.push(Artist::Scatter(artist));
-        match self.artists.last_mut().unwrap() {
+        match self.artists.last_mut().expect("just pushed") {
             Artist::Scatter(a) => Ok(a),
             _ => unreachable!(),
         }
@@ -225,7 +226,7 @@ impl Axes {
             alpha: 1.0,
         };
         self.artists.push(Artist::Bar(artist));
-        match self.artists.last_mut().unwrap() {
+        match self.artists.last_mut().expect("just pushed") {
             Artist::Bar(a) => Ok(a),
             _ => unreachable!(),
         }
@@ -267,7 +268,7 @@ impl Axes {
             alpha: 1.0,
         };
         self.artists.push(Artist::Bar(artist));
-        match self.artists.last_mut().unwrap() {
+        match self.artists.last_mut().expect("just pushed") {
             Artist::Bar(a) => Ok(a),
             _ => unreachable!(),
         }
@@ -307,7 +308,7 @@ impl Axes {
         // Build bin edges: bins+1 edges.
         let mut edges: Vec<f64> = (0..=bins).map(|i| lo + i as f64 * bin_width).collect();
         // Ensure the last edge exactly equals hi to avoid floating-point gaps.
-        *edges.last_mut().unwrap() = hi;
+        *edges.last_mut().expect("edges is non-empty") = hi;
 
         // Count values per bin.
         let mut counts = vec![0.0f64; bins];
@@ -346,7 +347,7 @@ impl Axes {
 
 
         self.artists.push(Artist::Histogram(artist));
-        match self.artists.last_mut().unwrap() {
+        match self.artists.last_mut().expect("just pushed") {
             Artist::Histogram(a) => Ok(a),
             _ => unreachable!(),
         }
@@ -400,7 +401,7 @@ impl Axes {
             alpha: 0.3,
         };
         self.artists.push(Artist::FillBetween(artist));
-        match self.artists.last_mut().unwrap() {
+        match self.artists.last_mut().expect("just pushed") {
             Artist::FillBetween(a) => Ok(a),
             _ => unreachable!(),
         }
@@ -1279,132 +1280,33 @@ impl Axes {
     // -----------------------------------------------------------------------
 
     /// Draws the legend box showing labeled artists.
+    ///
+    /// Builds [`LegendEntry`] items from the axes' artists and delegates to
+    /// [`legend::draw_legend`] for measurement, positioning, and rendering.
     fn draw_legend(
         &self,
         renderer: &mut impl Renderer,
         plot_area: &Rect,
         theme: &Theme,
     ) {
-        // Collect labeled artists.
-        let entries: Vec<(&str, Color)> = self
+        // Collect labeled artists into LegendEntry items, choosing the
+        // appropriate swatch kind for each artist type.
+        let entries: Vec<LegendEntry> = self
             .artists
             .iter()
             .filter_map(|a| {
-                let (label, color) = match a {
-                    Artist::Line(a) => (a.label.as_deref(), a.color),
-                    Artist::Scatter(a) => (a.label.as_deref(), a.color),
-                    Artist::Bar(a) => (a.label.as_deref(), a.color),
-                    Artist::Histogram(a) => (a.label.as_deref(), a.color),
-                    Artist::FillBetween(a) => (a.label.as_deref(), a.color),
+                let (label, color, swatch) = match a {
+                    Artist::Line(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
+                    Artist::Scatter(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Bar(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Histogram(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::FillBetween(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                 };
-                label.map(|l| (l, color))
+                label.map(|l| LegendEntry { label: l.to_string(), color, swatch })
             })
             .collect();
 
-        if entries.is_empty() {
-            return;
-        }
-
-        // Layout parameters.
-        let font_size = theme.tick_label_size;
-        let row_height = font_size + 4.0;
-        let swatch_size = font_size;
-        let swatch_gap = 5.0;
-        let padding_x = 8.0;
-        let padding_y = 6.0;
-
-        // Measure the widest label to determine legend box width.
-        let label_style = TextStyle {
-            size: font_size,
-            color: theme.text_color,
-            weight: FontWeight::Normal,
-            family: theme.font_family.clone(),
-            halign: HAlign::Left,
-            valign: VAlign::Top,
-        };
-
-        let max_label_width: f64 = entries
-            .iter()
-            .map(|(label, _)| renderer.measure_text(label, &label_style).0)
-            .fold(0.0_f64, f64::max);
-
-        let box_width = padding_x * 2.0 + swatch_size + swatch_gap + max_label_width;
-        let box_height = padding_y * 2.0 + entries.len() as f64 * row_height;
-
-        // Determine position based on legend_loc.
-        let margin = 10.0;
-        let (box_x, box_y) = match self.legend_loc {
-            Loc::UpperRight | Loc::Best => (
-                plot_area.right() - box_width - margin,
-                plot_area.y + margin,
-            ),
-            Loc::UpperLeft => (plot_area.x + margin, plot_area.y + margin),
-            Loc::LowerLeft => (
-                plot_area.x + margin,
-                plot_area.bottom() - box_height - margin,
-            ),
-            Loc::LowerRight => (
-                plot_area.right() - box_width - margin,
-                plot_area.bottom() - box_height - margin,
-            ),
-            Loc::Right | Loc::CenterRight => (
-                plot_area.right() - box_width - margin,
-                plot_area.y + (plot_area.height - box_height) / 2.0,
-            ),
-            Loc::CenterLeft => (
-                plot_area.x + margin,
-                plot_area.y + (plot_area.height - box_height) / 2.0,
-            ),
-            Loc::UpperCenter => (
-                plot_area.x + (plot_area.width - box_width) / 2.0,
-                plot_area.y + margin,
-            ),
-            Loc::LowerCenter => (
-                plot_area.x + (plot_area.width - box_width) / 2.0,
-                plot_area.bottom() - box_height - margin,
-            ),
-            Loc::Center => (
-                plot_area.x + (plot_area.width - box_width) / 2.0,
-                plot_area.y + (plot_area.height - box_height) / 2.0,
-            ),
-        };
-
-        // Draw legend background with semi-transparent white.
-        let bg_rect = Rect::new(box_x, box_y, box_width, box_height);
-        let bg_paint = Paint::new(Color::new(255, 255, 255, 220));
-        renderer.fill_path(&Path::rect(bg_rect), &bg_paint, Affine::IDENTITY);
-
-        // Draw legend border.
-        let border_paint = Paint::new(theme.spine_color);
-        let border_stroke = Stroke::new(0.5);
-        renderer.stroke_path(&Path::rect(bg_rect), &border_paint, &border_stroke, Affine::IDENTITY);
-
-        // Draw each entry.
-        for (i, (label, color)) in entries.iter().enumerate() {
-            let entry_y = box_y + padding_y + i as f64 * row_height;
-
-            // Color swatch.
-            let swatch_rect = Rect::new(
-                box_x + padding_x,
-                entry_y + 1.0,
-                swatch_size,
-                swatch_size - 2.0,
-            );
-            renderer.fill_path(
-                &Path::rect(swatch_rect),
-                &Paint::new(*color),
-                Affine::IDENTITY,
-            );
-
-            // Label text.
-            let text_x = box_x + padding_x + swatch_size + swatch_gap;
-            renderer.draw_text(
-                label,
-                Point::new(text_x, entry_y),
-                &label_style,
-                Affine::IDENTITY,
-            );
-        }
+        legend::draw_legend(renderer, &entries, plot_area, self.legend_loc, theme);
     }
 
     // -----------------------------------------------------------------------

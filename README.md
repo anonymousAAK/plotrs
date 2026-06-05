@@ -75,47 +75,51 @@ plotkit = "0.1"
 When you need more control — subplots, shared axes, fine-grained styling — drop down to the `Figure`/`Axes` API:
 
 ```rust
-use plotkit::{Figure, Axes};
+use plotkit::{Figure, FigureExt};
 
 let mut fig = Figure::new();
 
 // 1x2 subplot grid
 let ax1 = fig.add_subplot(1, 2, 1);
-ax1.plot(&x, &sin_y);
+ax1.plot(&x, &sin_y)?;
 ax1.set_title("sin(x)");
 ax1.set_xlabel("x");
 ax1.set_ylabel("y");
 
 let ax2 = fig.add_subplot(1, 2, 2);
-ax2.scatter(&x, &cos_y);
+ax2.scatter(&x, &cos_y)?;
 ax2.set_title("cos(x)");
 ax2.set_xlabel("x");
 
-fig.savefig("subplots.png")?;
+fig.save("subplots.png")?;
 ```
 
 ### Styling with Themes
 
 ```rust
-use plotkit::theme;
+use plotkit::{Figure, FigureExt, Theme};
 
-// Use a built-in theme
-theme::set("dark");
+let mut fig = Figure::new();
+fig.set_theme(Theme::dark());
 
-plotkit::plot(&x, &y)?;
-plotkit::savefig("dark_plot.svg")?;
+let ax = fig.add_subplot(1, 1, 1);
+ax.plot(&x, &y)?;
+
+fig.save("dark_plot.svg")?;
 ```
 
 ### Filled Regions
 
 ```rust
-use plotkit::Axes;
+use plotkit::{Figure, FigureExt};
 
-let mut ax = Axes::new();
-ax.fill_between(&x, &lower, &upper, Some("Confidence band"));
-ax.plot(&x, &mean);
+let mut fig = Figure::new();
+let ax = fig.add_subplot(1, 1, 1);
+ax.fill_between(&x, &lower, &upper)?.label = Some("Confidence band".into());
+ax.plot(&x, &mean)?;
 ax.legend();
-ax.savefig("confidence.png")?;
+
+fig.save("confidence.png")?;
 ```
 
 ## Performance

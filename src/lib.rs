@@ -63,7 +63,7 @@ pub fn plot<X: IntoSeries, Y: IntoSeries>(x: X, y: Y) -> Result<()> {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().plot(x, y)?;
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").plot(x, y)?;
         Ok(())
     })
 }
@@ -75,7 +75,7 @@ pub fn scatter<X: IntoSeries, Y: IntoSeries>(x: X, y: Y) -> Result<()> {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().scatter(x, y)?;
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").scatter(x, y)?;
         Ok(())
     })
 }
@@ -87,7 +87,7 @@ pub fn bar<C: IntoCategories, H: IntoSeries>(categories: C, heights: H) -> Resul
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().bar(categories, heights)?;
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").bar(categories, heights)?;
         Ok(())
     })
 }
@@ -99,7 +99,7 @@ pub fn hist<D: IntoSeries>(data: D, bins: usize) -> Result<()> {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().hist(data, bins)?;
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").hist(data, bins)?;
         Ok(())
     })
 }
@@ -111,7 +111,7 @@ pub fn title(s: &str) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().set_title(s);
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_title(s);
     })
 }
 
@@ -122,7 +122,7 @@ pub fn xlabel(s: &str) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().set_xlabel(s);
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xlabel(s);
     })
 }
 
@@ -133,7 +133,7 @@ pub fn ylabel(s: &str) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().set_ylabel(s);
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_ylabel(s);
     })
 }
 
@@ -144,7 +144,7 @@ pub fn legend() {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).unwrap().legend();
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").legend();
     })
 }
 
