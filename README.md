@@ -6,8 +6,8 @@
 
 [![Crates.io](https://img.shields.io/crates/v/plotkit.svg)](https://crates.io/crates/plotkit)
 [![docs.rs](https://docs.rs/plotkit/badge.svg)](https://docs.rs/plotkit)
-[![CI](https://github.com/pyscripter99/plotkit/actions/workflows/ci.yml/badge.svg)](https://github.com/pyscripter99/plotkit/actions)
-[![License](https://img.shields.io/crates/l/plotkit.svg)](https://github.com/pyscripter99/plotkit)
+[![CI](https://github.com/anonymousAAK/plotrs/actions/workflows/ci.yml/badge.svg)](https://github.com/anonymousAAK/plotrs/actions)
+[![License](https://img.shields.io/crates/l/plotkit.svg)](https://github.com/anonymousAAK/plotrs)
 
 </div>
 
@@ -67,7 +67,7 @@ Or add it manually to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-plotkit = "0.0.1"
+plotkit = "0.1"
 ```
 
 ## Figure & Axes API

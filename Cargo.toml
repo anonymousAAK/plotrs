@@ -4,12 +4,12 @@ resolver = "2"
 
 [package]
 name = "plotkit"
-version = "0.1.0-dev"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 description = "A matplotlib-shaped, publication-quality plotting library for Rust"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/pyscripter99/plotkit"
+repository = "https://github.com/anonymousAAK/plotrs"
 homepage = "https://plotkit.rs"
 documentation = "https://docs.rs/plotkit"
 readme = "README.md"
@@ -17,9 +17,9 @@ keywords = ["plotting", "chart", "visualization", "svg", "matplotlib"]
 categories = ["visualization", "science", "multimedia::images"]
 
 [dependencies]
-plotkit-core = { path = "crates/plotkit-core", version = "0.1.0-dev" }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0-dev" }
-plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.1.0-dev", optional = true }
+plotkit-core = { path = "crates/plotkit-core", version = "0.1.0" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0" }
+plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.1.0", optional = true }
 
 [features]
 default = ["png", "svg"]
@@ -52,4 +52,4 @@ path = "examples/05_fill_between.rs"
 
 [dev-dependencies]
 insta = { version = "1", features = ["glob"] }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0-dev" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.1.0" }

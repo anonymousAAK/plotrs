@@ -1,11 +1,11 @@
 [package]
 name = "plotkit-core"
-version = "0.1.0-dev"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Core types and logic for the plotkit plotting library"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/pyscripter99/plotkit"
+repository = "https://github.com/anonymousAAK/plotrs"
 
 [dependencies]
 kurbo = "0.11"
