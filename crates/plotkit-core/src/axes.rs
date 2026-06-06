@@ -30,6 +30,19 @@ const DEFAULT_TICK_COUNT: usize = 7;
 const AUTOSCALE_PAD: f64 = 0.05;
 
 // ---------------------------------------------------------------------------
+// TwinSide
+// ---------------------------------------------------------------------------
+
+/// Specifies which side a twin axes occupies relative to its parent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TwinSide {
+    /// The twin shares the x-axis and draws an independent y-axis on the right.
+    Right,
+    /// The twin shares the y-axis and draws an independent x-axis on the top.
+    Top,
+}
+
+// ---------------------------------------------------------------------------
 // Axes
 // ---------------------------------------------------------------------------
 
@@ -97,7 +110,13 @@ pub struct Axes {
     pub(crate) annotations: Vec<Annotation>,
     /// Tracks the current position in the color cycle so that each successive
     /// artist receives a distinct color automatically.
-    color_index: usize,
+    pub(crate) color_index: usize,
+    /// Whether this axes is a twin of another axes.
+    pub(crate) is_twin: bool,
+    /// Which side this twin axes occupies.
+    pub(crate) twin_side: Option<TwinSide>,
+    /// Optional colorbar attached to this axes.
+    pub(crate) colorbar: Option<Colorbar>,
 }
 
 // ---------------------------------------------------------------------------
@@ -134,9 +153,31 @@ impl Axes {
             texts: Vec::new(),
             annotations: Vec::new(),
             color_index: 0,
+            is_twin: false,
+            twin_side: None,
+            colorbar: None,
         }
     }
 
+    /// Creates a new twin axes.
+    pub(crate) fn new_twin(side: TwinSide, color_index: usize) -> Self {
+        Self {
+            is_twin: true,
+            twin_side: Some(side),
+            color_index,
+            ..Self::new()
+        }
+    }
+
+    /// Returns `true` if this axes is a twin of another axes.
+    pub fn is_twin(&self) -> bool {
+        self.is_twin
+    }
+
+    /// Returns the twin side, if this axes is a twin.
+    pub fn twin_side(&self) -> Option<TwinSide> {
+        self.twin_side
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +309,8 @@ impl Axes {
             bar_width: 0.8,
             label: None,
             alpha: 1.0,
+            bottom: None,
+            offset: None,
         };
         self.artists.push(Artist::Bar(artist));
         match self.artists.last_mut().expect("just pushed") {
@@ -310,6 +353,8 @@ impl Axes {
             bar_width: 0.8,
             label: None,
             alpha: 1.0,
+            bottom: None,
+            offset: None,
         };
         self.artists.push(Artist::Bar(artist));
         match self.artists.last_mut().expect("just pushed") {
@@ -644,6 +689,7 @@ impl Axes {
             show_values: false,
             color,
             label: None,
+            show_colorbar: false,
         };
         self.artists.push(Artist::Heatmap(artist));
         match self.artists.last_mut().expect("just pushed") {
@@ -890,6 +936,141 @@ impl Axes {
 }
 
 // ---------------------------------------------------------------------------
+// Colorbar
+// ---------------------------------------------------------------------------
+
+impl Axes {
+    /// Adds a colorbar to this axes.
+    pub fn colorbar(&mut self, cmap: crate::colormap::Colormap, vmin: f64, vmax: f64) -> &mut Colorbar {
+        self.colorbar = Some(Colorbar::new(cmap, vmin, vmax));
+        self.colorbar.as_mut().expect("just set")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Contour, Violin, Bar group
+// ---------------------------------------------------------------------------
+
+impl Axes {
+    /// Creates a contour plot (iso-lines) from a 2D grid of z values.
+    pub fn contour(
+        &mut self,
+        x: &[f64],
+        y: &[f64],
+        z: Vec<Vec<f64>>,
+    ) -> Result<&mut ContourArtist> {
+        if x.is_empty() || y.is_empty() || z.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = ContourArtist {
+            x: x.to_vec(),
+            y: y.to_vec(),
+            z,
+            levels: None,
+            filled: false,
+            cmap: crate::colormap::Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color,
+            num_levels: 10,
+        };
+        self.artists.push(Artist::Contour(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Contour(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a filled contour plot from a 2D grid of z values.
+    pub fn contourf(
+        &mut self,
+        x: &[f64],
+        y: &[f64],
+        z: Vec<Vec<f64>>,
+    ) -> Result<&mut ContourArtist> {
+        if x.is_empty() || y.is_empty() || z.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = ContourArtist {
+            x: x.to_vec(),
+            y: y.to_vec(),
+            z,
+            levels: None,
+            filled: true,
+            cmap: crate::colormap::Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color,
+            num_levels: 10,
+        };
+        self.artists.push(Artist::Contour(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Contour(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a violin plot from one or more datasets.
+    pub fn violin(&mut self, datasets: Vec<Vec<f64>>) -> Result<&mut ViolinArtist> {
+        if datasets.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = ViolinArtist {
+            datasets,
+            positions: None,
+            widths: 0.7,
+            show_median: true,
+            show_quartiles: true,
+            color,
+            alpha: 0.7,
+            label: None,
+            bw_method: 0.0,
+        };
+        self.artists.push(Artist::Violin(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Violin(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates grouped (side-by-side) bars for multiple series.
+    ///
+    /// `series` is a slice of `(label, heights)` pairs. Each series gets
+    /// bars placed side-by-side within each category.
+    pub fn bar_group<C: IntoCategories>(
+        &mut self,
+        categories: C,
+        series: &[(&str, Vec<f64>)],
+    ) -> Result<()> {
+        let cat_labels: Vec<String> = categories.into_categories().labels.iter().map(|s| s.to_string()).collect();
+        let n_series = series.len();
+        if n_series == 0 {
+            return Err(PlotError::EmptyData);
+        }
+        let total_width = 0.8;
+        let bar_width = total_width / n_series as f64;
+
+        for (si, (label, heights)) in series.iter().enumerate() {
+            let offset_val = (si as f64 - (n_series as f64 - 1.0) / 2.0) * bar_width;
+            let offsets: Vec<f64> = vec![offset_val; heights.len()];
+            let artist_ref = self.bar(cat_labels.clone(), heights.as_slice())?;
+            artist_ref.bar_width(bar_width);
+            artist_ref.offset(offsets);
+            artist_ref.label(label);
+        }
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Rendering pipeline
 // ---------------------------------------------------------------------------
 
@@ -911,6 +1092,16 @@ impl Axes {
     /// 9. Draw axis labels and title.
     /// 10. Draw legend (if enabled).
     pub(crate) fn render(&self, renderer: &mut impl Renderer, bounds: Rect, fig_theme: &Theme) {
+        self.render_primary(renderer, bounds, fig_theme, false);
+    }
+
+    pub(crate) fn render_primary(
+        &self,
+        renderer: &mut impl Renderer,
+        bounds: Rect,
+        fig_theme: &Theme,
+        suppress_legend: bool,
+    ) {
         let theme = self.theme_override.as_ref().unwrap_or(fig_theme);
 
         // Step 1: Compute data limits.
@@ -927,19 +1118,41 @@ impl Axes {
         layout_config.has_ylabel = self.ylabel.is_some();
         layout_config.has_legend = self.show_legend;
 
-
-
-
-
         let layout_result = layout::compute_layout(&layout_config);
 
-        // Offset the computed plot area by the bounds position.
-        let plot_area = Rect::new(
+        let full_plot_area = Rect::new(
             bounds.x + layout_result.plot_area.x,
             bounds.y + layout_result.plot_area.y,
             layout_result.plot_area.width,
             layout_result.plot_area.height,
         );
+
+        // Resolve the effective colorbar: either an explicit one or auto from heatmap.
+        let effective_colorbar = if self.colorbar.is_some() {
+            self.colorbar.clone()
+        } else {
+            self.auto_colorbar_from_artists()
+        };
+
+        // When a colorbar is present, shrink the plot area to make room.
+        let (plot_area, colorbar_rect) = if effective_colorbar.is_some() {
+            let cb_width = (full_plot_area.width * colorbar::COLORBAR_WIDTH_FRACTION).max(30.0);
+            let shrunk = Rect::new(
+                full_plot_area.x,
+                full_plot_area.y,
+                full_plot_area.width - cb_width - colorbar::COLORBAR_GAP,
+                full_plot_area.height,
+            );
+            let cb_rect = Rect::new(
+                full_plot_area.x + full_plot_area.width - cb_width,
+                full_plot_area.y,
+                cb_width,
+                full_plot_area.height,
+            );
+            (shrunk, Some(cb_rect))
+        } else {
+            (full_plot_area, None)
+        };
 
         // Step 4: Draw axes background.
         let bg_path = Path::rect(plot_area);
@@ -986,9 +1199,121 @@ impl Axes {
         self.draw_annotations(renderer, &plot_area, xmin, xmax, ymin, ymax, theme);
 
         // Step 10: Draw legend if enabled.
-        if self.show_legend {
+        if self.show_legend && !suppress_legend {
             self.draw_legend(renderer, &plot_area, theme);
         }
+
+        // Draw colorbar if present.
+        if let (Some(ref cb), Some(ref cb_rect)) = (&effective_colorbar, &colorbar_rect) {
+            colorbar::draw_colorbar(renderer, cb, cb_rect, theme);
+        }
+    }
+
+    fn auto_colorbar_from_artists(&self) -> Option<Colorbar> {
+        for artist in &self.artists {
+            if let Artist::Heatmap(a) = artist {
+                if a.show_colorbar {
+                    return Some(Colorbar::new(
+                        a.cmap,
+                        a.effective_vmin(),
+                        a.effective_vmax(),
+                    ));
+                }
+            }
+        }
+        None
+    }
+
+    /// Renders this twin axes overlaid on its parent's plot area.
+    pub(crate) fn render_twin(
+        &self,
+        renderer: &mut impl Renderer,
+        plot_area: Rect,
+        bounds: Rect,
+        fig_theme: &Theme,
+    ) {
+        let theme = self.theme_override.as_ref().unwrap_or(fig_theme);
+        let (xmin, xmax, ymin, ymax) = self.compute_data_limits();
+        let yticks = self.resolve_yticks(ymin, ymax);
+        let xticks = self.resolve_xticks(xmin, xmax);
+
+        let clip_path = Path::rect(plot_area);
+        renderer.push_clip(&clip_path, Affine::IDENTITY);
+        for artist in &self.artists {
+            self.draw_artist(renderer, artist, &plot_area, xmin, xmax, ymin, ymax, theme);
+        }
+        renderer.pop_clip();
+
+        let side = self.twin_side.unwrap_or(TwinSide::Right);
+        match side {
+            TwinSide::Right => {
+                let paint = Paint::new(theme.spine_color);
+                let stroke = Stroke::new(theme.spine_width);
+                let mut p = Path::new();
+                p.move_to(plot_area.right(), plot_area.y);
+                p.line_to(plot_area.right(), plot_area.bottom());
+                renderer.stroke_path(&p, &paint, &stroke, Affine::IDENTITY);
+                self.draw_ticks_right(renderer, &plot_area, &yticks, ymin, ymax, theme);
+                self.draw_ylabel_right(renderer, &plot_area, &bounds, theme);
+            }
+            TwinSide::Top => {
+                let paint = Paint::new(theme.spine_color);
+                let stroke = Stroke::new(theme.spine_width);
+                let mut p = Path::new();
+                p.move_to(plot_area.x, plot_area.y);
+                p.line_to(plot_area.right(), plot_area.y);
+                renderer.stroke_path(&p, &paint, &stroke, Affine::IDENTITY);
+                self.draw_ticks_top(renderer, &plot_area, &xticks, xmin, xmax, theme);
+                self.draw_xlabel_top(renderer, &plot_area, theme);
+            }
+        }
+
+        self.draw_annotations(renderer, &plot_area, xmin, xmax, ymin, ymax, theme);
+    }
+
+    /// Returns the computed plot area for this axes given a bounds rectangle.
+    pub(crate) fn compute_plot_area(&self, bounds: &Rect) -> Rect {
+        let mut layout_config = LayoutConfig::new(bounds.width, bounds.height);
+        layout_config.has_title = self.title.is_some();
+        layout_config.has_xlabel = self.xlabel.is_some();
+        layout_config.has_ylabel = self.ylabel.is_some();
+        layout_config.has_legend = self.show_legend;
+        let layout_result = layout::compute_layout(&layout_config);
+        Rect::new(
+            bounds.x + layout_result.plot_area.x,
+            bounds.y + layout_result.plot_area.y,
+            layout_result.plot_area.width,
+            layout_result.plot_area.height,
+        )
+    }
+
+    /// Collects legend entries from this axes' artists.
+    pub fn collect_legend_entries(&self) -> Vec<LegendEntry> {
+        self.artists
+            .iter()
+            .filter_map(|a| {
+                let (label, color, swatch) = match a {
+                    Artist::Line(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
+                    Artist::Scatter(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Bar(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Histogram(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::FillBetween(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Step(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
+                    Artist::Stem(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::BoxPlot(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::ErrorBar(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
+                    Artist::Heatmap(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Pie(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Violin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Contour(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
+                };
+                label.map(|l| LegendEntry {
+                    label: l.to_string(),
+                    color,
+                    swatch,
+                })
+            })
+            .collect()
     }
 
     // -----------------------------------------------------------------------
@@ -1120,6 +1445,20 @@ impl Axes {
                 Artist::Pie(a) => {
                     // Pie charts define their own coordinate space and
                     // should not participate in normal autoscaling.
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
+                Artist::Violin(a) => {
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
+                Artist::Contour(a) => {
                     let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
                     x_lo = x_lo.min(bxlo);
                     x_hi = x_hi.max(bxhi);
@@ -1358,6 +1697,8 @@ impl Axes {
             Artist::ErrorBar(a) => self.draw_errorbar(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::Heatmap(a) => self.draw_heatmap(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::Pie(a) => self.draw_pie(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
+            Artist::Violin(a) => self.draw_violin(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
+            Artist::Contour(a) => self.draw_contour(renderer, a, plot_area, xmin, xmax, ymin, ymax),
         }
     }
 
@@ -1558,11 +1899,21 @@ impl Axes {
             let bar_half = cat_step * artist.bar_width * 0.5;
 
             for i in 0..n {
-                let cat_center = ymin + (i as f64 + 0.5) * cat_step;
+                let base_center = ymin + (i as f64 + 0.5) * cat_step;
+                let cat_center = if let Some(ref off) = artist.offset {
+                    base_center + if i < off.len() { off[i] } else { 0.0 }
+                } else {
+                    base_center
+                };
                 let value = artist.heights.data[i];
+                let base = if let Some(ref bot) = artist.bottom {
+                    if i < bot.len() { bot[i] } else { 0.0 }
+                } else {
+                    0.0
+                };
 
-                let left_val = 0.0_f64.min(value);
-                let right_val = 0.0_f64.max(value);
+                let left_val = base.min(base + value);
+                let right_val = base.max(base + value);
 
                 let p_left = self.data_to_pixel(left_val, cat_center - bar_half, plot_area, xmin, xmax, ymin, ymax);
                 let p_right = self.data_to_pixel(right_val, cat_center + bar_half, plot_area, xmin, xmax, ymin, ymax);
@@ -1578,11 +1929,21 @@ impl Axes {
             let bar_half = cat_step * artist.bar_width * 0.5;
 
             for i in 0..n {
-                let cat_center = xmin + (i as f64 + 0.5) * cat_step;
+                let base_center = xmin + (i as f64 + 0.5) * cat_step;
+                let cat_center = if let Some(ref off) = artist.offset {
+                    base_center + if i < off.len() { off[i] } else { 0.0 }
+                } else {
+                    base_center
+                };
                 let value = artist.heights.data[i];
+                let base = if let Some(ref bot) = artist.bottom {
+                    if i < bot.len() { bot[i] } else { 0.0 }
+                } else {
+                    0.0
+                };
 
-                let bottom_val = 0.0_f64.min(value);
-                let top_val = 0.0_f64.max(value);
+                let bottom_val = base.min(base + value);
+                let top_val = base.max(base + value);
 
                 let p_bl = self.data_to_pixel(cat_center - bar_half, bottom_val, plot_area, xmin, xmax, ymin, ymax);
                 let p_tr = self.data_to_pixel(cat_center + bar_half, top_val, plot_area, xmin, xmax, ymin, ymax);
@@ -1926,6 +2287,169 @@ impl Axes {
             tp.move_to(x_start, y);
             tp.line_to(x_end, y);
             renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
+        }
+    }
+
+    /// Draws y-axis tick marks and labels on the right side.
+    fn draw_ticks_right(
+        &self,
+        renderer: &mut impl Renderer,
+        plot_area: &Rect,
+        yticks: &[ticks::Tick],
+        ymin: f64,
+        ymax: f64,
+        theme: &Theme,
+    ) {
+        let tick_paint = Paint::new(theme.tick_color);
+        let tick_stroke = Stroke::new(1.0);
+        let tick_len = theme.tick_length;
+        let outward = matches!(theme.tick_direction, TickDirection::Outward);
+
+        let y_label_style = TextStyle {
+            size: theme.tick_label_size,
+            color: theme.text_color,
+            weight: FontWeight::Normal,
+            family: theme.font_family.clone(),
+            halign: HAlign::Left,
+            valign: VAlign::Middle,
+        };
+
+        let y_rot_rad = -self.ytick_rotation.to_radians();
+
+        for tick in yticks {
+            let pt = self.data_to_pixel(0.0, tick.value, plot_area, 0.0, 1.0, ymin, ymax);
+            if pt.y < plot_area.y - 0.5 || pt.y > plot_area.bottom() + 0.5 {
+                continue;
+            }
+            let y = pt.y;
+            let x_base = plot_area.right();
+            let (x_start, x_end) = if outward {
+                (x_base, x_base + tick_len)
+            } else {
+                (x_base - tick_len, x_base)
+            };
+            let mut tp = Path::new();
+            tp.move_to(x_start, y);
+            tp.line_to(x_end, y);
+            renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
+
+            let label_x = if outward { x_base + tick_len + 3.0 } else { x_base + 3.0 };
+            let label_pos = Point::new(label_x, y);
+            let transform = if self.ytick_rotation.abs() > 0.01 {
+                let rotate = Affine::rotate(y_rot_rad);
+                let to_origin = Affine::translate(kurbo::Vec2::new(-label_pos.x, -label_pos.y));
+                let from_origin = Affine::translate(kurbo::Vec2::new(label_pos.x, label_pos.y));
+                from_origin * rotate * to_origin
+            } else {
+                Affine::IDENTITY
+            };
+            renderer.draw_text(&tick.label, label_pos, &y_label_style, transform);
+        }
+    }
+
+    /// Draws the y-axis label on the right side, rotated 90 degrees clockwise.
+    fn draw_ylabel_right(
+        &self,
+        renderer: &mut impl Renderer,
+        plot_area: &Rect,
+        bounds: &Rect,
+        theme: &Theme,
+    ) {
+        if let Some(ylabel) = &self.ylabel {
+            let style = TextStyle {
+                size: theme.axis_label_size,
+                color: theme.text_color,
+                weight: FontWeight::Normal,
+                family: theme.font_family.clone(),
+                halign: HAlign::Center,
+                valign: VAlign::Top,
+            };
+            let x = bounds.right() - 4.0;
+            let y = plot_area.y + plot_area.height / 2.0;
+            let rotate = Affine::rotate(std::f64::consts::FRAC_PI_2);
+            let translate_to = Affine::translate(kurbo::Vec2::new(x, y));
+            let translate_back = Affine::translate(kurbo::Vec2::new(-x, -y));
+            let transform = translate_to * rotate * translate_back;
+            renderer.draw_text(ylabel, Point::new(x, y), &style, transform);
+        }
+    }
+
+    /// Draws x-axis tick marks and labels on the top of the plot area.
+    fn draw_ticks_top(
+        &self,
+        renderer: &mut impl Renderer,
+        plot_area: &Rect,
+        xticks: &[ticks::Tick],
+        xmin: f64,
+        xmax: f64,
+        theme: &Theme,
+    ) {
+        let tick_paint = Paint::new(theme.tick_color);
+        let tick_stroke = Stroke::new(1.0);
+        let tick_len = theme.tick_length;
+        let outward = matches!(theme.tick_direction, TickDirection::Outward);
+
+        let x_label_style = TextStyle {
+            size: theme.tick_label_size,
+            color: theme.text_color,
+            weight: FontWeight::Normal,
+            family: theme.font_family.clone(),
+            halign: if self.xtick_rotation.abs() > 1.0 { HAlign::Left } else { HAlign::Center },
+            valign: VAlign::Bottom,
+        };
+
+        let x_rot_rad = -self.xtick_rotation.to_radians();
+
+        for tick in xticks {
+            let pt = self.data_to_pixel(tick.value, 0.0, plot_area, xmin, xmax, 0.0, 1.0);
+            if pt.x < plot_area.x - 0.5 || pt.x > plot_area.right() + 0.5 {
+                continue;
+            }
+            let x = pt.x;
+            let y_base = plot_area.y;
+            let (y_start, y_end) = if outward {
+                (y_base - tick_len, y_base)
+            } else {
+                (y_base, y_base + tick_len)
+            };
+            let mut tp = Path::new();
+            tp.move_to(x, y_start);
+            tp.line_to(x, y_end);
+            renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
+
+            let label_y = if outward { y_base - tick_len - 2.0 } else { y_base - 2.0 };
+            let label_pos = Point::new(x, label_y);
+            let transform = if self.xtick_rotation.abs() > 0.01 {
+                let rotate = Affine::rotate(x_rot_rad);
+                let to_origin = Affine::translate(kurbo::Vec2::new(-label_pos.x, -label_pos.y));
+                let from_origin = Affine::translate(kurbo::Vec2::new(label_pos.x, label_pos.y));
+                from_origin * rotate * to_origin
+            } else {
+                Affine::IDENTITY
+            };
+            renderer.draw_text(&tick.label, label_pos, &x_label_style, transform);
+        }
+    }
+
+    /// Draws the x-axis label on the top side.
+    fn draw_xlabel_top(
+        &self,
+        renderer: &mut impl Renderer,
+        plot_area: &Rect,
+        theme: &Theme,
+    ) {
+        if let Some(xlabel) = &self.xlabel {
+            let style = TextStyle {
+                size: theme.axis_label_size,
+                color: theme.text_color,
+                weight: FontWeight::Normal,
+                family: theme.font_family.clone(),
+                halign: HAlign::Center,
+                valign: VAlign::Bottom,
+            };
+            let x = plot_area.x + plot_area.width / 2.0;
+            let y = plot_area.y - theme.tick_length - theme.tick_label_size - 8.0;
+            renderer.draw_text(xlabel, Point::new(x, y), &style, Affine::IDENTITY);
         }
     }
 
@@ -2695,6 +3219,195 @@ impl Axes {
         }
     }
 
+    /// Draws a contour or filled contour plot.
+    fn draw_contour(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &ContourArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        let nx = artist.x.len();
+        let ny = artist.y.len();
+        if nx < 2 || ny < 2 || artist.z.len() < 2 {
+            return;
+        }
+
+        let levels = artist.effective_levels();
+        let (zmin, zmax) = artist.z_bounds();
+
+        if artist.filled {
+            let avgs = artist.cell_averages();
+            for (j, row) in avgs.iter().enumerate() {
+                for (i, &avg) in row.iter().enumerate() {
+                    if !avg.is_finite() {
+                        continue;
+                    }
+                    let cell_color = if let Some(ref colors) = artist.colors {
+                        let idx = levels
+                            .iter()
+                            .position(|&l| avg < l)
+                            .unwrap_or(levels.len())
+                            .saturating_sub(1);
+                        colors[idx % colors.len()]
+                    } else {
+                        artist.cmap.map_value(avg, zmin, zmax)
+                    };
+                    let p_bl = self.data_to_pixel(
+                        artist.x[i], artist.y[j],
+                        plot_area, xmin, xmax, ymin, ymax,
+                    );
+                    let p_tr = self.data_to_pixel(
+                        artist.x[i + 1], artist.y[j + 1],
+                        plot_area, xmin, xmax, ymin, ymax,
+                    );
+                    let rect = Rect::from_points(p_bl, p_tr);
+                    let cell_path = Path::rect(rect);
+                    renderer.fill_path(&cell_path, &Paint::new(cell_color), Affine::IDENTITY);
+                }
+            }
+        }
+
+        if !artist.filled {
+            for (li, &level) in levels.iter().enumerate() {
+                let segments = artist.marching_squares(level);
+                if segments.is_empty() {
+                    continue;
+                }
+                let line_color = if let Some(ref colors) = artist.colors {
+                    colors[li % colors.len()]
+                } else {
+                    artist.cmap.map_value(level, zmin, zmax)
+                };
+                let paint = Paint::new(line_color);
+                let stroke = Stroke::new(artist.linewidths);
+                for (sx0, sy0, sx1, sy1) in &segments {
+                    let p0 = self.data_to_pixel(*sx0, *sy0, plot_area, xmin, xmax, ymin, ymax);
+                    let p1 = self.data_to_pixel(*sx1, *sy1, plot_area, xmin, xmax, ymin, ymax);
+                    let mut path = Path::new();
+                    path.move_to(p0.x, p0.y);
+                    path.line_to(p1.x, p1.y);
+                    renderer.stroke_path(&path, &paint, &stroke, Affine::IDENTITY);
+                }
+            }
+        }
+    }
+
+    /// Draws a violin plot.
+    fn draw_violin(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &ViolinArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+        theme: &Theme,
+    ) {
+        use crate::charts::violin::{gaussian_kde, silverman_bandwidth};
+
+        let fill_color = artist.color.with_alpha((artist.alpha * 255.0) as u8);
+        let fill_paint = Paint::new(fill_color);
+        let outline_paint = Paint::new(artist.color);
+        let outline_stroke = Stroke::new(1.0);
+
+        for (di, data) in artist.datasets.iter().enumerate() {
+            let mut sorted: Vec<f64> = data.iter().copied().filter(|v| v.is_finite()).collect();
+            if sorted.is_empty() {
+                continue;
+            }
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+            let pos = artist.positions.as_ref()
+                .and_then(|p| p.get(di).copied())
+                .unwrap_or(di as f64 + 1.0);
+
+            let bw = if artist.bw_method > 0.0 {
+                artist.bw_method
+            } else {
+                silverman_bandwidth(&sorted)
+            };
+
+            let data_min = sorted[0];
+            let data_max = sorted[sorted.len() - 1];
+            let n_eval = 100;
+            let eval_points: Vec<f64> = (0..n_eval)
+                .map(|i| data_min + (data_max - data_min) * i as f64 / (n_eval - 1) as f64)
+                .collect();
+            let densities = gaussian_kde(&sorted, bw, &eval_points);
+
+            let max_density = densities.iter().copied().fold(0.0_f64, f64::max);
+            if max_density <= 0.0 {
+                continue;
+            }
+
+            let half_width = artist.widths * 0.5;
+
+            // Build mirrored path
+            let mut path = Path::new();
+            // Right side (top to bottom in data space)
+            let first_y = eval_points[0];
+            let first_w = densities[0] / max_density * half_width;
+            let fp = self.data_to_pixel(pos + first_w, first_y, plot_area, xmin, xmax, ymin, ymax);
+            path.move_to(fp.x, fp.y);
+            for i in 1..n_eval {
+                let w = densities[i] / max_density * half_width;
+                let p = self.data_to_pixel(pos + w, eval_points[i], plot_area, xmin, xmax, ymin, ymax);
+                path.line_to(p.x, p.y);
+            }
+            // Left side (bottom to top)
+            for i in (0..n_eval).rev() {
+                let w = densities[i] / max_density * half_width;
+                let p = self.data_to_pixel(pos - w, eval_points[i], plot_area, xmin, xmax, ymin, ymax);
+                path.line_to(p.x, p.y);
+            }
+            path.close();
+
+            renderer.fill_path(&path, &fill_paint, Affine::IDENTITY);
+            renderer.stroke_path(&path, &outline_paint, &outline_stroke, Affine::IDENTITY);
+
+            // Median and quartile lines
+            let n = sorted.len();
+            if artist.show_median {
+                let median = if n % 2 == 0 {
+                    (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
+                } else {
+                    sorted[n / 2]
+                };
+                let med_density = gaussian_kde(&sorted, bw, &[median])[0];
+                let med_w = med_density / max_density * half_width;
+                let p1 = self.data_to_pixel(pos - med_w, median, plot_area, xmin, xmax, ymin, ymax);
+                let p2 = self.data_to_pixel(pos + med_w, median, plot_area, xmin, xmax, ymin, ymax);
+                let mut mp = Path::new();
+                mp.move_to(p1.x, p1.y);
+                mp.line_to(p2.x, p2.y);
+                let med_paint = Paint::new(theme.text_color);
+                let med_stroke = Stroke::new(2.0);
+                renderer.stroke_path(&mp, &med_paint, &med_stroke, Affine::IDENTITY);
+            }
+
+            if artist.show_quartiles && n >= 4 {
+                let q1 = sorted[n / 4];
+                let q3 = sorted[3 * n / 4];
+                for q in [q1, q3] {
+                    let q_density = gaussian_kde(&sorted, bw, &[q])[0];
+                    let q_w = q_density / max_density * half_width;
+                    let p1 = self.data_to_pixel(pos - q_w, q, plot_area, xmin, xmax, ymin, ymax);
+                    let p2 = self.data_to_pixel(pos + q_w, q, plot_area, xmin, xmax, ymin, ymax);
+                    let mut qp = Path::new();
+                    qp.move_to(p1.x, p1.y);
+                    qp.line_to(p2.x, p2.y);
+                    let q_stroke = Stroke::new(1.0).with_dash(DashPattern { dashes: vec![4.0, 2.0], offset: 0.0 });
+                    renderer.stroke_path(&qp, &Paint::new(theme.text_color), &q_stroke, Affine::IDENTITY);
+                }
+            }
+        }
+    }
+
     fn draw_legend(
         &self,
         renderer: &mut impl Renderer,
@@ -2719,6 +3432,8 @@ impl Axes {
                     Artist::ErrorBar(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
                     Artist::Heatmap(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Pie(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Violin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Contour(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
                 };
                 label.map(|l| LegendEntry { label: l.to_string(), color, swatch })
             })
@@ -3755,4 +4470,65 @@ mod tests {
         assert!((p_hi.x - 1000.0).abs() < 1e-6);
     }
 
+    // -----------------------------------------------------------------------
+    // Twin axes tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn new_axes_has_no_twin_fields() {
+        let ax = Axes::new();
+        assert!(!ax.is_twin());
+        assert_eq!(ax.twin_side(), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Colorbar tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn colorbar_attaches_to_axes() {
+        let mut ax = Axes::new();
+        let cb = ax.colorbar(crate::colormap::Colormap::Viridis, 0.0, 1.0);
+        cb.set_label("Test");
+        assert!(ax.colorbar.is_some());
+        assert_eq!(ax.colorbar.as_ref().unwrap().label.as_deref(), Some("Test"));
+    }
+
+    #[test]
+    fn colorbar_replaces_previous() {
+        let mut ax = Axes::new();
+        ax.colorbar(crate::colormap::Colormap::Viridis, 0.0, 1.0);
+        ax.colorbar(crate::colormap::Colormap::Plasma, -10.0, 10.0);
+        let cb = ax.colorbar.as_ref().unwrap();
+        assert_eq!(cb.cmap, crate::colormap::Colormap::Plasma);
+        assert!((cb.vmin - (-10.0)).abs() < f64::EPSILON);
+        assert!((cb.vmax - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn heatmap_auto_colorbar() {
+        let mut ax = Axes::new();
+        ax.heatmap(vec![vec![1.0, 2.0], vec![3.0, 4.0]])
+            .unwrap()
+            .colorbar(true);
+        let auto_cb = ax.auto_colorbar_from_artists();
+        assert!(auto_cb.is_some());
+        let cb = auto_cb.unwrap();
+        assert!((cb.vmin - 1.0).abs() < f64::EPSILON);
+        assert!((cb.vmax - 4.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn heatmap_no_auto_colorbar_by_default() {
+        let mut ax = Axes::new();
+        ax.heatmap(vec![vec![1.0, 2.0]]).unwrap();
+        let auto_cb = ax.auto_colorbar_from_artists();
+        assert!(auto_cb.is_none());
+    }
+
+    #[test]
+    fn new_axes_has_no_colorbar() {
+        let ax = Axes::new();
+        assert!(ax.colorbar.is_none());
+    }
 }
