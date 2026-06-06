@@ -34,14 +34,22 @@
 #[cfg(feature = "jupyter")]
 pub mod jupyter;
 
-pub use plotkit_core::{primitives, renderer, error, series, scale, ticks, theme, layout, artist, axes, figure, legend, charts, colormap};
+#[cfg(feature = "ndarray")]
+pub use plotkit_ndarray;
+
+#[cfg(feature = "polars")]
+pub use plotkit_polars;
+
+pub use plotkit_core::{primitives, renderer, error, series, scale, ticks, theme, layout, artist, annotations, axes, figure, legend, charts, colormap};
 pub use plotkit_core::figure::Figure;
 pub use plotkit_core::axes::Axes;
 pub use plotkit_core::primitives::Color;
-pub use plotkit_core::theme::{Theme, LineStyle, Marker, Loc};
+pub use plotkit_core::theme::{Theme, LineStyle, Marker, Loc, GridAxis};
 pub use plotkit_core::scale::Scale;
 pub use plotkit_core::series::{IntoSeries, IntoCategories};
 pub use plotkit_core::error::{PlotError, Result};
+pub use plotkit_core::annotations::{ArrowStyle, TextAnnotation, Annotation};
+pub use plotkit_core::primitives::{HAlign, VAlign};
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -53,7 +61,7 @@ thread_local! {
 /// The plotkit prelude — import this for convenient access to all common types.
 pub mod prelude {
     pub use plotkit_core::prelude::*;
-    pub use crate::{plot, scatter, bar, hist, title, xlabel, ylabel, legend, savefig, clf, subplots};
+    pub use crate::{plot, scatter, bar, hist, title, xlabel, ylabel, xlim, ylim, grid, xticks, yticks, xscale, yscale, legend, savefig, clf, subplots};
     pub use crate::FigureExt;
 }
 
@@ -137,6 +145,83 @@ pub fn ylabel(s: &str) {
             fig.add_subplot(1, 1, 1);
         }
         fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_ylabel(s);
+    })
+}
+
+/// Sets explicit x-axis limits on the current axes.
+pub fn xlim(min: f64, max: f64) {
+    CURRENT_FIGURE.with(|fig| {
+        let mut fig = fig.borrow_mut();
+        if fig.num_axes() == 0 {
+            fig.add_subplot(1, 1, 1);
+        }
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xlim(min, max);
+    })
+}
+
+/// Sets explicit y-axis limits on the current axes.
+pub fn ylim(min: f64, max: f64) {
+    CURRENT_FIGURE.with(|fig| {
+        let mut fig = fig.borrow_mut();
+        if fig.num_axes() == 0 {
+            fig.add_subplot(1, 1, 1);
+        }
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_ylim(min, max);
+    })
+}
+
+/// Enables or disables grid lines on the current axes.
+pub fn grid(visible: bool) {
+    CURRENT_FIGURE.with(|fig| {
+        let mut fig = fig.borrow_mut();
+        if fig.num_axes() == 0 {
+            fig.add_subplot(1, 1, 1);
+        }
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").grid(visible);
+    })
+}
+
+/// Sets custom x-axis tick positions on the current axes.
+pub fn xticks(ticks: &[f64]) {
+    CURRENT_FIGURE.with(|fig| {
+        let mut fig = fig.borrow_mut();
+        if fig.num_axes() == 0 {
+            fig.add_subplot(1, 1, 1);
+        }
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xticks(ticks);
+    })
+}
+
+/// Sets custom y-axis tick positions on the current axes.
+pub fn yticks(ticks: &[f64]) {
+    CURRENT_FIGURE.with(|fig| {
+        let mut fig = fig.borrow_mut();
+        if fig.num_axes() == 0 {
+            fig.add_subplot(1, 1, 1);
+        }
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_yticks(ticks);
+    })
+}
+
+/// Sets the x-axis scale on the current axes.
+pub fn xscale(scale: Scale) {
+    CURRENT_FIGURE.with(|fig| {
+        let mut fig = fig.borrow_mut();
+        if fig.num_axes() == 0 {
+            fig.add_subplot(1, 1, 1);
+        }
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xscale(scale);
+    })
+}
+
+/// Sets the y-axis scale on the current axes.
+pub fn yscale(scale: Scale) {
+    CURRENT_FIGURE.with(|fig| {
+        let mut fig = fig.borrow_mut();
+        if fig.num_axes() == 0 {
+            fig.add_subplot(1, 1, 1);
+        }
+        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_yscale(scale);
     })
 }
 

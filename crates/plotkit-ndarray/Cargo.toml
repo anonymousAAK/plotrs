@@ -1,0 +1,12 @@
+[package]
+name = "plotkit-ndarray"
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.75"
+description = "ndarray integration for the plotkit plotting library"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/anonymousAAK/plotrs"
+
+[dependencies]
+plotkit-core = { path = "../plotkit-core", version = "0.3.0", features = ["ndarray"] }
+ndarray = "0.16"

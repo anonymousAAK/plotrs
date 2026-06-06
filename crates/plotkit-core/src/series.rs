@@ -163,6 +163,155 @@ impl IntoSeries for &[i32] {
     }
 }
 
+// -- ndarray (feature-gated) -----------------------------------------------
+
+#[cfg(feature = "ndarray")]
+mod ndarray_impls {
+    use super::{IntoSeries, Series};
+    use ndarray::{Array1, ArrayView1};
+
+    // -- f64 (zero-copy where possible) ------------------------------------
+
+    impl IntoSeries for &Array1<f64> {
+        /// Converts a reference to an `Array1<f64>` into a [`Series`].
+        ///
+        /// Uses `as_slice()` for zero-copy access on contiguous arrays and
+        /// falls back to an iterator copy for non-standard memory layouts.
+        fn into_series(self) -> Series {
+            match self.as_slice() {
+                Some(slice) => Series::new(slice.to_vec()),
+                None => Series::new(self.iter().copied().collect()),
+            }
+        }
+    }
+
+    impl IntoSeries for Array1<f64> {
+        /// Converts an owned `Array1<f64>` into a [`Series`].
+        ///
+        /// Attempts to unwrap the underlying `Vec` without copying. Falls
+        /// back to a copy when the array is not in standard layout.
+        fn into_series(self) -> Series {
+            if self.is_standard_layout() {
+                let len = self.len();
+                let (vec, offset) = self.into_raw_vec_and_offset();
+                let offset = offset.unwrap_or(0);
+                if offset == 0 && vec.len() == len {
+                    Series::new(vec)
+                } else {
+                    Series::new(vec[offset..offset + len].to_vec())
+                }
+            } else {
+                Series::new(self.iter().copied().collect())
+            }
+        }
+    }
+
+    impl IntoSeries for ArrayView1<'_, f64> {
+        /// Converts an `ArrayView1<f64>` into a [`Series`].
+        ///
+        /// Uses `as_slice()` for contiguous views and falls back to
+        /// element-wise iteration for strided views.
+        fn into_series(self) -> Series {
+            match self.as_slice() {
+                Some(slice) => Series::new(slice.to_vec()),
+                None => Series::new(self.iter().copied().collect()),
+            }
+        }
+    }
+
+    // -- Cast types (f32, i32, i64) ----------------------------------------
+
+    macro_rules! impl_into_series_ndarray_cast {
+        ($t:ty) => {
+            impl IntoSeries for &Array1<$t> {
+                fn into_series(self) -> Series {
+                    Series::new(self.iter().map(|&v| v as f64).collect())
+                }
+            }
+
+            impl IntoSeries for Array1<$t> {
+                fn into_series(self) -> Series {
+                    Series::new(self.iter().map(|&v| v as f64).collect())
+                }
+            }
+
+            impl IntoSeries for ArrayView1<'_, $t> {
+                fn into_series(self) -> Series {
+                    Series::new(self.iter().map(|&v| v as f64).collect())
+                }
+            }
+        };
+    }
+
+    impl_into_series_ndarray_cast!(f32);
+    impl_into_series_ndarray_cast!(i32);
+    impl_into_series_ndarray_cast!(i64);
+}
+
+// -- polars (feature-gated) ------------------------------------------------
+
+#[cfg(feature = "polars")]
+mod polars_impls {
+    use super::{Categories, IntoCategories, IntoSeries, Series};
+    use polars::prelude::*;
+
+    /// Extracts numeric values from a Polars [`Series`](polars::prelude::Series),
+    /// casting to `f64`. Null entries become `f64::NAN`.
+    fn extract_numeric(series: &polars::prelude::Series) -> Vec<f64> {
+        let ca = series
+            .cast(&DataType::Float64)
+            .unwrap_or_else(|_| {
+                panic!(
+                    "plotkit-polars: cannot cast series {:?} (dtype {:?}) to Float64",
+                    series.name(),
+                    series.dtype()
+                )
+            });
+        let ca = ca
+            .f64()
+            .expect("cast to Float64 always yields f64 chunked array");
+        ca.into_iter().map(|opt| opt.unwrap_or(f64::NAN)).collect()
+    }
+
+    impl IntoSeries for &polars::prelude::Series {
+        /// Converts a borrowed Polars [`Series`](polars::prelude::Series) into
+        /// a plotkit [`Series`].
+        ///
+        /// Supports numeric dtypes: `Float64`, `Float32`, `Int32`, `Int64`,
+        /// `UInt32`, `UInt64`. Null values become `f64::NAN`.
+        fn into_series(self) -> Series {
+            Series::new(extract_numeric(self))
+        }
+    }
+
+    impl IntoSeries for polars::prelude::Series {
+        /// Converts an owned Polars [`Series`](polars::prelude::Series) into
+        /// a plotkit [`Series`]. Delegates to the borrowed implementation.
+        fn into_series(self) -> Series {
+            (&self).into_series()
+        }
+    }
+
+    impl IntoCategories for &polars::prelude::Series {
+        /// Converts a borrowed Polars string [`Series`](polars::prelude::Series)
+        /// into plotkit [`Categories`]. Null values become the string `"null"`.
+        fn into_categories(self) -> Categories {
+            let ca = self.str().unwrap_or_else(|_| {
+                panic!(
+                    "plotkit-polars: series {:?} (dtype {:?}) is not a string type",
+                    self.name(),
+                    self.dtype()
+                )
+            });
+            let labels: Vec<String> = ca
+                .into_iter()
+                .map(|opt| opt.unwrap_or("null").to_owned())
+                .collect();
+            Categories::new(labels)
+        }
+    }
+}
+
 // -- f32 containers --------------------------------------------------------
 
 impl IntoSeries for Vec<f32> {

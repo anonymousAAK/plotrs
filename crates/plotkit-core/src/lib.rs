@@ -17,6 +17,7 @@ pub mod scale;
 pub mod ticks;
 pub mod theme;
 pub mod layout;
+pub mod annotations;
 pub mod artist;
 pub mod axes;
 pub mod figure;
@@ -32,6 +33,8 @@ pub mod prelude {
     pub use crate::primitives::Color;
     pub use crate::scale::Scale;
     pub use crate::series::{IntoSeries, IntoCategories};
-    pub use crate::theme::{Theme, LineStyle, Marker, Loc};
+    pub use crate::theme::{Theme, LineStyle, Marker, Loc, GridAxis};
     pub use crate::colormap::Colormap;
+    pub use crate::annotations::{ArrowStyle, TextAnnotation, Annotation};
+    pub use crate::primitives::{HAlign, VAlign};
 }

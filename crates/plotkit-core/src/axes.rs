@@ -5,6 +5,7 @@
 //! and drives the full ten-step render pipeline that produces the final visual
 //! output within a subplot rectangle.
 
+use crate::annotations::{Annotation, ArrowStyle, TextAnnotation};
 use crate::artist::*;
 use crate::error::{PlotError, Result};
 use crate::layout::{self, LayoutConfig};
@@ -13,7 +14,7 @@ use crate::primitives::*;
 use crate::renderer::Renderer;
 use crate::scale::Scale;
 use crate::series::{IntoCategories, IntoSeries};
-use crate::theme::{Loc, Marker, Theme, TickDirection};
+use crate::theme::{GridAxis, LineStyle, Loc, Marker, Theme, TickDirection};
 use crate::ticks;
 
 // ---------------------------------------------------------------------------
@@ -60,12 +61,39 @@ pub struct Axes {
     pub(crate) yscale: Scale,
     /// Whether to show grid lines. `None` defers to the theme default.
     pub(crate) show_grid: Option<bool>,
+    /// Which axes display grid lines (x-only, y-only, or both).
+    pub(crate) grid_axis: GridAxis,
+    /// Grid line opacity override (0.0 = transparent, 1.0 = opaque). `None`
+    /// means fully opaque.
+    pub(crate) grid_alpha: Option<f64>,
+    /// Grid line style override. `None` means use the theme default (solid).
+    pub(crate) grid_style: Option<LineStyle>,
+    /// Whether the x-axis is inverted (max on left, min on right).
+    pub(crate) x_inverted: bool,
+    /// Whether the y-axis is inverted (max on bottom, min on top).
+    pub(crate) y_inverted: bool,
+    /// Custom x-axis tick positions. `None` means auto-generate.
+    pub(crate) custom_xticks: Option<Vec<f64>>,
+    /// Custom y-axis tick positions. `None` means auto-generate.
+    pub(crate) custom_yticks: Option<Vec<f64>>,
+    /// Custom x-axis tick labels. Must match the custom tick count.
+    pub(crate) custom_xticklabels: Option<Vec<String>>,
+    /// Custom y-axis tick labels. Must match the custom tick count.
+    pub(crate) custom_yticklabels: Option<Vec<String>>,
+    /// Rotation angle in degrees for x-axis tick labels.
+    pub(crate) xtick_rotation: f64,
+    /// Rotation angle in degrees for y-axis tick labels.
+    pub(crate) ytick_rotation: f64,
     /// Whether the legend should be drawn.
     pub(crate) show_legend: bool,
     /// Where to place the legend.
     pub(crate) legend_loc: Loc,
     /// Per-axes theme override. `None` means use the figure theme.
     pub(crate) theme_override: Option<Theme>,
+    /// Text labels placed at data-space coordinates via [`Axes::text`].
+    pub(crate) texts: Vec<TextAnnotation>,
+    /// Annotations (text + optional arrow) placed via [`Axes::annotate`].
+    pub(crate) annotations: Vec<Annotation>,
     /// Tracks the current position in the color cycle so that each successive
     /// artist receives a distinct color automatically.
     color_index: usize,
@@ -88,9 +116,22 @@ impl Axes {
             xscale: Scale::default(),
             yscale: Scale::default(),
             show_grid: None,
+            grid_axis: GridAxis::default(),
+            grid_alpha: None,
+            grid_style: None,
+            x_inverted: false,
+            y_inverted: false,
+            custom_xticks: None,
+            custom_yticks: None,
+            custom_xticklabels: None,
+            custom_yticklabels: None,
+            xtick_rotation: 0.0,
+            ytick_rotation: 0.0,
             show_legend: false,
             legend_loc: Loc::Best,
             theme_override: None,
+            texts: Vec::new(),
+            annotations: Vec::new(),
             color_index: 0,
         }
     }
@@ -609,6 +650,41 @@ impl Axes {
             _ => unreachable!(),
         }
     }
+
+    /// Creates a pie chart from wedge sizes.
+    ///
+    /// The `sizes` are automatically normalised so that all wedges sum to
+    /// a full circle. Returns a mutable reference to the [`PieArtist`]
+    /// for chaining builder methods (`.labels()`, `.autopct()`,
+    /// `.explode()`, etc.).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::EmptyData`] if `sizes` is empty.
+    pub fn pie<S: IntoSeries>(&mut self, sizes: S) -> Result<&mut PieArtist> {
+        let series = sizes.into_series();
+        if series.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = PieArtist {
+            sizes: series.data,
+            labels: None,
+            colors: None,
+            explode: None,
+            autopct: false,
+            start_angle: 90.0,
+            radius: 1.0,
+            label: None,
+            color,
+        };
+        self.artists.push(Artist::Pie(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Pie(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -681,6 +757,135 @@ impl Axes {
         self.theme_override = Some(theme);
         self
     }
+
+    /// Sets which axes display grid lines.
+    ///
+    /// Accepts `"x"`, `"y"`, or `"both"` (the default). Unrecognised values
+    /// are silently treated as `"both"`.
+    pub fn grid_axis(&mut self, axis: &str) -> &mut Self {
+        self.grid_axis = match axis {
+            "x" => GridAxis::X,
+            "y" => GridAxis::Y,
+            _ => GridAxis::Both,
+        };
+        self
+    }
+
+    /// Sets the grid line opacity (0.0 = fully transparent, 1.0 = fully opaque).
+    pub fn grid_alpha(&mut self, alpha: f64) -> &mut Self {
+        self.grid_alpha = Some(alpha.clamp(0.0, 1.0));
+        self
+    }
+
+    /// Sets the grid line style.
+    pub fn grid_style(&mut self, style: LineStyle) -> &mut Self {
+        self.grid_style = Some(style);
+        self
+    }
+
+    /// Inverts the x-axis so that larger values appear on the left.
+    pub fn invert_xaxis(&mut self) -> &mut Self {
+        self.x_inverted = true;
+        self
+    }
+
+    /// Inverts the y-axis so that larger values appear at the bottom.
+    pub fn invert_yaxis(&mut self) -> &mut Self {
+        self.y_inverted = true;
+        self
+    }
+
+    /// Sets custom tick positions on the x-axis.
+    ///
+    /// When set, the auto-generated ticks are replaced by these positions.
+    pub fn set_xticks(&mut self, ticks: &[f64]) -> &mut Self {
+        self.custom_xticks = Some(ticks.to_vec());
+        self
+    }
+
+    /// Sets custom tick positions on the y-axis.
+    ///
+    /// When set, the auto-generated ticks are replaced by these positions.
+    pub fn set_yticks(&mut self, ticks: &[f64]) -> &mut Self {
+        self.custom_yticks = Some(ticks.to_vec());
+        self
+    }
+
+    /// Sets custom tick labels for the x-axis.
+    ///
+    /// The number of labels should match the number of custom tick positions
+    /// set via [`set_xticks`](Axes::set_xticks). Extra labels are ignored;
+    /// missing labels default to the formatted tick value.
+    pub fn set_xticklabels(&mut self, labels: &[&str]) -> &mut Self {
+        self.custom_xticklabels = Some(labels.iter().map(|s| s.to_string()).collect());
+        self
+    }
+
+    /// Sets custom tick labels for the y-axis.
+    ///
+    /// The number of labels should match the number of custom tick positions
+    /// set via [`set_yticks`](Axes::set_yticks). Extra labels are ignored;
+    /// missing labels default to the formatted tick value.
+    pub fn set_yticklabels(&mut self, labels: &[&str]) -> &mut Self {
+        self.custom_yticklabels = Some(labels.iter().map(|s| s.to_string()).collect());
+        self
+    }
+
+    /// Sets the rotation angle (in degrees) for x-axis tick labels.
+    pub fn tick_params_x_rotation(&mut self, degrees: f64) -> &mut Self {
+        self.xtick_rotation = degrees;
+        self
+    }
+
+    /// Sets the rotation angle (in degrees) for y-axis tick labels.
+    pub fn tick_params_y_rotation(&mut self, degrees: f64) -> &mut Self {
+        self.ytick_rotation = degrees;
+        self
+    }
+
+    /// Places a text label at data coordinates `(x, y)`.
+    ///
+    /// Returns a mutable reference to the [`TextAnnotation`] for builder-style
+    /// configuration (`.fontsize()`, `.color()`, `.ha()`, `.va()`, `.rotation()`).
+    ///
+    /// Text annotations do **not** affect autoscale; they annotate existing
+    /// data without expanding the axis limits.
+    pub fn text(&mut self, x: f64, y: f64, text: &str) -> &mut TextAnnotation {
+        self.texts.push(TextAnnotation {
+            text: text.to_string(),
+            x,
+            y,
+            fontsize: None,
+            color: None,
+            ha: HAlign::Left,
+            va: VAlign::Baseline,
+            rotation: 0.0,
+        });
+        self.texts.last_mut().expect("just pushed")
+    }
+
+    /// Annotates the data point `xy` with `text` placed at `xytext`.
+    ///
+    /// Returns a mutable reference to the [`Annotation`] for builder-style
+    /// configuration (`.fontsize()`, `.color()`, `.ha()`, `.va()`,
+    /// `.arrowstyle()`, `.arrow_color()`).
+    ///
+    /// When an [`ArrowStyle`] other than [`ArrowStyle::None`] is set, an arrow
+    /// is drawn from `xytext` to `xy`. Annotations do **not** affect autoscale.
+    pub fn annotate(&mut self, text: &str, xy: (f64, f64), xytext: (f64, f64)) -> &mut Annotation {
+        self.annotations.push(Annotation {
+            text: text.to_string(),
+            xy,
+            xytext,
+            fontsize: None,
+            color: None,
+            ha: HAlign::Center,
+            va: VAlign::Bottom,
+            arrowstyle: ArrowStyle::None,
+            arrow_color: None,
+        });
+        self.annotations.last_mut().expect("just pushed")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -710,9 +915,9 @@ impl Axes {
         // Step 1: Compute data limits.
         let (xmin, xmax, ymin, ymax) = self.compute_data_limits();
 
-        // Step 2: Generate ticks.
-        let xticks = ticks::generate_ticks(xmin, xmax, DEFAULT_TICK_COUNT, &self.xscale);
-        let yticks = ticks::generate_ticks(ymin, ymax, DEFAULT_TICK_COUNT, &self.yscale);
+        // Step 2: Generate ticks (use custom ticks if provided).
+        let xticks = self.resolve_xticks(xmin, xmax);
+        let yticks = self.resolve_yticks(ymin, ymax);
 
         // Step 3: Compute layout (reserve space for labels, ticks, title).
         let mut layout_config = LayoutConfig::new(bounds.width, bounds.height);
@@ -752,14 +957,32 @@ impl Axes {
         }
         renderer.pop_clip();
 
+        // Step 6b: Draw minor ticks for log scales (behind spines, after data).
+        let x_minor = if matches!(self.xscale, Scale::Log10) {
+            ticks::generate_log_minor_ticks(xmin, xmax)
+        } else {
+            Vec::new()
+        };
+        let y_minor = if matches!(self.yscale, Scale::Log10) {
+            ticks::generate_log_minor_ticks(ymin, ymax)
+        } else {
+            Vec::new()
+        };
+
         // Step 7: Draw spines.
         self.draw_spines(renderer, &plot_area, theme);
 
-        // Step 8: Draw ticks and tick labels.
+        // Step 8: Draw ticks and tick labels (including minor ticks).
         self.draw_ticks(renderer, &plot_area, &xticks, &yticks, xmin, xmax, ymin, ymax, theme);
+        if !x_minor.is_empty() || !y_minor.is_empty() {
+            self.draw_minor_ticks(renderer, &plot_area, &x_minor, &y_minor, xmin, xmax, ymin, ymax, theme);
+        }
 
         // Step 9: Draw axis labels and title.
         self.draw_labels(renderer, &plot_area, &bounds, theme);
+
+        // Step 9b: Draw text annotations and arrow annotations.
+        self.draw_annotations(renderer, &plot_area, xmin, xmax, ymin, ymax, theme);
 
         // Step 10: Draw legend if enabled.
         if self.show_legend {
@@ -893,17 +1116,45 @@ impl Axes {
                     y_lo = y_lo.min(bylo);
                     y_hi = y_hi.max(byhi);
                 }
+                Artist::Pie(a) => {
+                    // Pie charts define their own coordinate space and
+                    // should not participate in normal autoscaling.
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
             }
         }
 
         // Handle the case where there are no artists or no finite data.
         if !x_lo.is_finite() || !x_hi.is_finite() {
-            x_lo = 0.0;
-            x_hi = 1.0;
+            x_lo = if self.xscale.requires_positive() { 1.0 } else { 0.0 };
+            x_hi = if self.xscale.requires_positive() { 10.0 } else { 1.0 };
         }
         if !y_lo.is_finite() || !y_hi.is_finite() {
-            y_lo = 0.0;
-            y_hi = 1.0;
+            y_lo = if self.yscale.requires_positive() { 1.0 } else { 0.0 };
+            y_hi = if self.yscale.requires_positive() { 10.0 } else { 1.0 };
+        }
+
+        // For log scales, clamp the lower bound to a positive value.
+        if self.xscale.requires_positive() {
+            if x_lo <= 0.0 {
+                // Use a small fraction of x_hi, or fall back to a sensible default.
+                x_lo = if x_hi > 0.0 { x_hi * 1e-4 } else { 1.0 };
+            }
+            if x_hi <= x_lo {
+                x_hi = x_lo * 10.0;
+            }
+        }
+        if self.yscale.requires_positive() {
+            if y_lo <= 0.0 {
+                y_lo = if y_hi > 0.0 { y_hi * 1e-4 } else { 1.0 };
+            }
+            if y_hi <= y_lo {
+                y_hi = y_lo * 10.0;
+            }
         }
 
         // Handle degenerate ranges (all data at a single point).
@@ -917,12 +1168,26 @@ impl Axes {
         }
 
         // Apply padding (5% on each side).
-        let x_pad = (x_hi - x_lo) * AUTOSCALE_PAD;
-        let y_pad = (y_hi - y_lo) * AUTOSCALE_PAD;
-        x_lo -= x_pad;
-        x_hi += x_pad;
-        y_lo -= y_pad;
-        y_hi += y_pad;
+        // For log scales, apply multiplicative padding instead of additive.
+        let (x_pad_lo, x_pad_hi) = if self.xscale.requires_positive() {
+            // Multiplicative padding: shrink lo, grow hi by a factor.
+            let factor = 1.0 + AUTOSCALE_PAD;
+            (x_lo / factor, x_hi * factor)
+        } else {
+            let pad = (x_hi - x_lo) * AUTOSCALE_PAD;
+            (x_lo - pad, x_hi + pad)
+        };
+        let (y_pad_lo, y_pad_hi) = if self.yscale.requires_positive() {
+            let factor = 1.0 + AUTOSCALE_PAD;
+            (y_lo / factor, y_hi * factor)
+        } else {
+            let pad = (y_hi - y_lo) * AUTOSCALE_PAD;
+            (y_lo - pad, y_hi + pad)
+        };
+        x_lo = x_pad_lo;
+        x_hi = x_pad_hi;
+        y_lo = y_pad_lo;
+        y_hi = y_pad_hi;
 
         // Apply user-set limits, overriding auto-scale.
         if let Some((lo, hi)) = self.xlim {
@@ -934,7 +1199,63 @@ impl Axes {
             y_hi = hi;
         }
 
+        // Apply axis inversion by swapping min/max.
+        if self.x_inverted {
+            std::mem::swap(&mut x_lo, &mut x_hi);
+        }
+        if self.y_inverted {
+            std::mem::swap(&mut y_lo, &mut y_hi);
+        }
+
         (x_lo, x_hi, y_lo, y_hi)
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 2 helpers: tick resolution
+    // -----------------------------------------------------------------------
+
+    /// Resolves x-axis ticks: uses custom ticks when set, falls back to
+    /// auto-generation.
+    fn resolve_xticks(&self, xmin: f64, xmax: f64) -> Vec<ticks::Tick> {
+        if let Some(ref positions) = self.custom_xticks {
+            let labels = self.custom_xticklabels.as_ref();
+            positions
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| ticks::Tick {
+                    value: v,
+                    label: labels
+                        .and_then(|l| l.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| ticks::format_tick_value(v)),
+                })
+                .collect()
+        } else {
+            let (lo, hi) = if xmin <= xmax { (xmin, xmax) } else { (xmax, xmin) };
+            ticks::generate_ticks(lo, hi, DEFAULT_TICK_COUNT, &self.xscale)
+        }
+    }
+
+    /// Resolves y-axis ticks: uses custom ticks when set, falls back to
+    /// auto-generation.
+    fn resolve_yticks(&self, ymin: f64, ymax: f64) -> Vec<ticks::Tick> {
+        if let Some(ref positions) = self.custom_yticks {
+            let labels = self.custom_yticklabels.as_ref();
+            positions
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| ticks::Tick {
+                    value: v,
+                    label: labels
+                        .and_then(|l| l.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| ticks::format_tick_value(v)),
+                })
+                .collect()
+        } else {
+            let (lo, hi) = if ymin <= ymax { (ymin, ymax) } else { (ymax, ymin) };
+            ticks::generate_ticks(lo, hi, DEFAULT_TICK_COUNT, &self.yscale)
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -954,25 +1275,57 @@ impl Axes {
         ymax: f64,
         theme: &Theme,
     ) {
-        let paint = Paint::new(theme.grid_color);
-        let stroke = Stroke::new(theme.grid_width);
+        // Apply grid alpha override.
+        let grid_color = if let Some(alpha) = self.grid_alpha {
+            theme.grid_color.with_alpha((alpha * 255.0) as u8)
+        } else {
+            theme.grid_color
+        };
+        let paint = Paint::new(grid_color);
+
+        // Apply grid line style override.
+        let mut stroke = Stroke::new(theme.grid_width);
+        if let Some(style) = self.grid_style {
+            stroke = match style {
+                LineStyle::Solid => stroke,
+                LineStyle::Dashed => stroke.with_dash(DashPattern {
+                    dashes: vec![6.0, 4.0],
+                    offset: 0.0,
+                }),
+                LineStyle::Dotted => stroke.with_dash(DashPattern {
+                    dashes: vec![2.0, 2.0],
+                    offset: 0.0,
+                }),
+                LineStyle::DashDot => stroke.with_dash(DashPattern {
+                    dashes: vec![6.0, 3.0, 2.0, 3.0],
+                    offset: 0.0,
+                }),
+            };
+        }
+
+        let draw_x = matches!(self.grid_axis, GridAxis::X | GridAxis::Both);
+        let draw_y = matches!(self.grid_axis, GridAxis::Y | GridAxis::Both);
 
         // Vertical grid lines at each x-tick.
-        for tick in xticks {
-            let pt = self.data_to_pixel(tick.value, ymin, plot_area, xmin, xmax, ymin, ymax);
-            let mut path = Path::new();
-            path.move_to(pt.x, plot_area.y);
-            path.line_to(pt.x, plot_area.bottom());
-            renderer.stroke_path(&path, &paint, &stroke, Affine::IDENTITY);
+        if draw_x {
+            for tick in xticks {
+                let pt = self.data_to_pixel(tick.value, ymin, plot_area, xmin, xmax, ymin, ymax);
+                let mut path = Path::new();
+                path.move_to(pt.x, plot_area.y);
+                path.line_to(pt.x, plot_area.bottom());
+                renderer.stroke_path(&path, &paint, &stroke, Affine::IDENTITY);
+            }
         }
 
         // Horizontal grid lines at each y-tick.
-        for tick in yticks {
-            let pt = self.data_to_pixel(xmin, tick.value, plot_area, xmin, xmax, ymin, ymax);
-            let mut path = Path::new();
-            path.move_to(plot_area.x, pt.y);
-            path.line_to(plot_area.right(), pt.y);
-            renderer.stroke_path(&path, &paint, &stroke, Affine::IDENTITY);
+        if draw_y {
+            for tick in yticks {
+                let pt = self.data_to_pixel(xmin, tick.value, plot_area, xmin, xmax, ymin, ymax);
+                let mut path = Path::new();
+                path.move_to(plot_area.x, pt.y);
+                path.line_to(plot_area.right(), pt.y);
+                renderer.stroke_path(&path, &paint, &stroke, Affine::IDENTITY);
+            }
         }
     }
 
@@ -1003,6 +1356,7 @@ impl Axes {
             Artist::BoxPlot(a) => self.draw_boxplot(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::ErrorBar(a) => self.draw_errorbar(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::Heatmap(a) => self.draw_heatmap(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::Pie(a) => self.draw_pie(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
         }
     }
 
@@ -1395,17 +1749,24 @@ impl Axes {
         let tick_stroke = Stroke::new(1.0);
         let tick_len = theme.tick_length;
 
-        let label_style = TextStyle {
+        let x_label_style = TextStyle {
             size: theme.tick_label_size,
             color: theme.text_color,
             weight: FontWeight::Normal,
             family: theme.font_family.clone(),
-            halign: HAlign::Center,
+            halign: if self.xtick_rotation.abs() > 1.0 {
+                HAlign::Right
+            } else {
+                HAlign::Center
+            },
             valign: VAlign::Top,
         };
 
         // Tick direction offset: outward goes away from plot, inward goes in.
         let outward = matches!(theme.tick_direction, TickDirection::Outward);
+
+        // Pre-compute x-tick rotation transform builder.
+        let x_rot_rad = -self.xtick_rotation.to_radians();
 
         // --- X-axis ticks (bottom) ---
         for tick in xticks {
@@ -1428,17 +1789,26 @@ impl Axes {
             tp.line_to(x, y_end);
             renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
 
-            // Draw tick label.
+            // Draw tick label with optional rotation.
             let label_y = if outward {
                 y_base + tick_len + 2.0
             } else {
                 y_base + 2.0
             };
+            let label_pos = Point::new(x, label_y);
+            let transform = if self.xtick_rotation.abs() > 0.01 {
+                let rotate = Affine::rotate(x_rot_rad);
+                let to_origin = Affine::translate(kurbo::Vec2::new(-label_pos.x, -label_pos.y));
+                let from_origin = Affine::translate(kurbo::Vec2::new(label_pos.x, label_pos.y));
+                from_origin * rotate * to_origin
+            } else {
+                Affine::IDENTITY
+            };
             renderer.draw_text(
                 &tick.label,
-                Point::new(x, label_y),
-                &label_style,
-                Affine::IDENTITY,
+                label_pos,
+                &x_label_style,
+                transform,
             );
         }
 
@@ -1446,8 +1816,11 @@ impl Axes {
         let y_label_style = TextStyle {
             halign: HAlign::Right,
             valign: VAlign::Middle,
-            ..label_style.clone()
+            ..x_label_style.clone()
         };
+
+        // Pre-compute y-tick rotation transform builder.
+        let y_rot_rad = -self.ytick_rotation.to_radians();
 
         for tick in yticks {
             let pt = self.data_to_pixel(xmin, tick.value, plot_area, xmin, xmax, ymin, ymax);
@@ -1469,18 +1842,89 @@ impl Axes {
             tp.line_to(x_end, y);
             renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
 
-            // Draw tick label.
+            // Draw tick label with optional rotation.
             let label_x = if outward {
                 x_base - tick_len - 3.0
             } else {
                 x_base - 3.0
             };
+            let label_pos = Point::new(label_x, y);
+            let transform = if self.ytick_rotation.abs() > 0.01 {
+                let rotate = Affine::rotate(y_rot_rad);
+                let to_origin = Affine::translate(kurbo::Vec2::new(-label_pos.x, -label_pos.y));
+                let from_origin = Affine::translate(kurbo::Vec2::new(label_pos.x, label_pos.y));
+                from_origin * rotate * to_origin
+            } else {
+                Affine::IDENTITY
+            };
             renderer.draw_text(
                 &tick.label,
-                Point::new(label_x, y),
+                label_pos,
                 &y_label_style,
-                Affine::IDENTITY,
+                transform,
             );
+        }
+    }
+
+    /// Draws minor tick marks (without labels) along axes.
+    ///
+    /// Minor ticks are drawn shorter than major ticks and have no text labels.
+    /// They are used primarily on log-scale axes to indicate sub-decade positions
+    /// (2, 3, 4, 5, 6, 7, 8, 9 between each power of 10).
+    fn draw_minor_ticks(
+        &self,
+        renderer: &mut impl Renderer,
+        plot_area: &Rect,
+        x_minor: &[f64],
+        y_minor: &[f64],
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+        theme: &Theme,
+    ) {
+        let tick_paint = Paint::new(theme.tick_color);
+        let tick_stroke = Stroke::new(0.5);
+        // Minor ticks are half the length of major ticks.
+        let tick_len = theme.tick_length * 0.5;
+        let outward = matches!(theme.tick_direction, TickDirection::Outward);
+
+        // --- X-axis minor ticks (bottom) ---
+        for &val in x_minor {
+            let pt = self.data_to_pixel(val, ymin, plot_area, xmin, xmax, ymin, ymax);
+            if pt.x < plot_area.x - 0.5 || pt.x > plot_area.right() + 0.5 {
+                continue;
+            }
+            let x = pt.x;
+            let y_base = plot_area.bottom();
+            let (y_start, y_end) = if outward {
+                (y_base, y_base + tick_len)
+            } else {
+                (y_base - tick_len, y_base)
+            };
+            let mut tp = Path::new();
+            tp.move_to(x, y_start);
+            tp.line_to(x, y_end);
+            renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
+        }
+
+        // --- Y-axis minor ticks (left) ---
+        for &val in y_minor {
+            let pt = self.data_to_pixel(xmin, val, plot_area, xmin, xmax, ymin, ymax);
+            if pt.y < plot_area.y - 0.5 || pt.y > plot_area.bottom() + 0.5 {
+                continue;
+            }
+            let y = pt.y;
+            let x_base = plot_area.x;
+            let (x_start, x_end) = if outward {
+                (x_base - tick_len, x_base)
+            } else {
+                (x_base, x_base + tick_len)
+            };
+            let mut tp = Path::new();
+            tp.move_to(x_start, y);
+            tp.line_to(x_end, y);
+            renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
         }
     }
 
@@ -1945,6 +2389,311 @@ impl Axes {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Step 9b: Text and arrow annotations
+    // -----------------------------------------------------------------------
+
+    /// Draws all text annotations and arrow annotations.
+    fn draw_annotations(
+        &self,
+        renderer: &mut impl Renderer,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+        theme: &Theme,
+    ) {
+        // --- TextAnnotation items ---
+        for ta in &self.texts {
+            let pt = self.data_to_pixel(ta.x, ta.y, plot_area, xmin, xmax, ymin, ymax);
+            let size = ta.fontsize.unwrap_or(theme.axis_label_size);
+            let color = ta.color.unwrap_or(theme.text_color);
+            let style = TextStyle {
+                size,
+                color,
+                weight: FontWeight::Normal,
+                family: theme.font_family.clone(),
+                halign: ta.ha,
+                valign: ta.va,
+            };
+            if ta.rotation.abs() < f64::EPSILON {
+                renderer.draw_text(&ta.text, pt, &style, Affine::IDENTITY);
+            } else {
+                let angle_rad = -ta.rotation.to_radians();
+                let rotate = Affine::rotate(angle_rad);
+                let translate_to = Affine::translate(kurbo::Vec2::new(pt.x, pt.y));
+                let translate_back = Affine::translate(kurbo::Vec2::new(-pt.x, -pt.y));
+                let transform = translate_to * rotate * translate_back;
+                renderer.draw_text(&ta.text, pt, &style, transform);
+            }
+        }
+
+        // --- Annotation items (text + optional arrow) ---
+        for ann in &self.annotations {
+            let text_pt = self.data_to_pixel(
+                ann.xytext.0, ann.xytext.1,
+                plot_area, xmin, xmax, ymin, ymax,
+            );
+            let target_pt = self.data_to_pixel(
+                ann.xy.0, ann.xy.1,
+                plot_area, xmin, xmax, ymin, ymax,
+            );
+
+            let size = ann.fontsize.unwrap_or(theme.axis_label_size);
+            let color = ann.color.unwrap_or(theme.text_color);
+            let style = TextStyle {
+                size,
+                color,
+                weight: FontWeight::Normal,
+                family: theme.font_family.clone(),
+                halign: ann.ha,
+                valign: ann.va,
+            };
+            renderer.draw_text(&ann.text, text_pt, &style, Affine::IDENTITY);
+
+            // Draw arrow if requested.
+            if ann.arrowstyle != ArrowStyle::None {
+                let arrow_col = ann.arrow_color.unwrap_or(color);
+                self.draw_annotation_arrow(
+                    renderer, text_pt, target_pt, arrow_col, &ann.arrowstyle,
+                );
+            }
+        }
+    }
+
+    /// Draws an arrow line from `from` to `to` with an arrowhead at `to`.
+    fn draw_annotation_arrow(
+        &self,
+        renderer: &mut impl Renderer,
+        from: Point,
+        to: Point,
+        color: Color,
+        style: &ArrowStyle,
+    ) {
+        let paint = Paint::new(color);
+        let stroke = Stroke::new(1.0);
+
+        // Direction vector from `from` to `to`.
+        let dx = to.x - from.x;
+        let dy = to.y - from.y;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 1e-6 {
+            return;
+        }
+
+        // Unit direction vector.
+        let ux = dx / len;
+        let uy = dy / len;
+
+        // Draw the line from `from` to `to`.
+        let mut line = Path::new();
+        line.move_to(from.x, from.y);
+        line.line_to(to.x, to.y);
+        renderer.stroke_path(&line, &paint, &stroke, Affine::IDENTITY);
+
+        // Draw a filled triangular arrowhead at `to`.
+        let head_len = match style {
+            ArrowStyle::None => return,
+            ArrowStyle::Simple => 8.0,
+            ArrowStyle::Fancy => 12.0,
+        };
+        let head_half_width = match style {
+            ArrowStyle::None => return,
+            ArrowStyle::Simple => 3.0,
+            ArrowStyle::Fancy => 5.0,
+        };
+
+        // Perpendicular to the direction.
+        let px = -uy;
+        let py = ux;
+
+        // Triangle vertices: tip at `to`, base offset by head_len along -direction.
+        let base_x = to.x - ux * head_len;
+        let base_y = to.y - uy * head_len;
+
+        let left_x = base_x + px * head_half_width;
+        let left_y = base_y + py * head_half_width;
+        let right_x = base_x - px * head_half_width;
+        let right_y = base_y - py * head_half_width;
+
+        let mut arrow = Path::new();
+        arrow.move_to(to.x, to.y);
+        arrow.line_to(left_x, left_y);
+        arrow.line_to(right_x, right_y);
+        arrow.close();
+        renderer.fill_path(&arrow, &paint, Affine::IDENTITY);
+    }
+
+    /// Draws a pie chart: fills arc wedges centered in the plot area.
+    ///
+    /// Each wedge is built as a closed path from the center to the arc
+    /// perimeter, using cubic Bezier segments to approximate circular
+    /// arcs (each sub-arc spans at most 90 degrees).
+    fn draw_pie(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &PieArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+        theme: &Theme,
+    ) {
+        let n = artist.sizes.len();
+        if n == 0 {
+            return;
+        }
+
+        // Normalise sizes to fractions summing to 1.0.
+        let total: f64 = artist.sizes.iter().copied().filter(|v| v.is_finite() && *v > 0.0).sum();
+        if total <= 0.0 {
+            return;
+        }
+        let fractions: Vec<f64> = artist.sizes.iter().map(|&s| {
+            if s.is_finite() && s > 0.0 { s / total } else { 0.0 }
+        }).collect();
+
+        // Center of the pie in data space is (0, 0).
+        let center_px = self.data_to_pixel(0.0, 0.0, plot_area, xmin, xmax, ymin, ymax);
+
+        // Compute pixel radius: map (radius, 0) and use x-distance.
+        let edge_px = self.data_to_pixel(artist.radius, 0.0, plot_area, xmin, xmax, ymin, ymax);
+        let radius_px = (edge_px.x - center_px.x).abs();
+
+        let start_rad = artist.start_angle.to_radians();
+        let mut current_angle = start_rad;
+
+        let pct_style = TextStyle {
+            size: 10.0,
+            color: Color::BLACK,
+            weight: FontWeight::Normal,
+            family: None,
+            halign: HAlign::Center,
+            valign: VAlign::Middle,
+        };
+        let label_style = TextStyle {
+            size: 11.0,
+            color: theme.tick_color,
+            weight: FontWeight::Normal,
+            family: None,
+            halign: HAlign::Center,
+            valign: VAlign::Middle,
+        };
+
+        for i in 0..n {
+            let frac = fractions[i];
+            if frac <= 0.0 {
+                current_angle += frac * std::f64::consts::TAU;
+                continue;
+            }
+
+            let sweep = frac * std::f64::consts::TAU;
+            let mid_angle = current_angle + sweep / 2.0;
+
+            // Resolve wedge color.
+            let wedge_color = if let Some(ref colors) = artist.colors {
+                colors[i % colors.len()]
+            } else {
+                Color::TABLEAU_10[i % 10]
+            };
+
+            // Compute explode offset in pixels.
+            let explode_frac = artist.explode.as_ref().map(|e| {
+                if i < e.len() { e[i] } else { 0.0 }
+            }).unwrap_or(0.0);
+            let offset_x = explode_frac * radius_px * mid_angle.cos();
+            let offset_y = explode_frac * radius_px * (-mid_angle.sin()); // y inverted
+
+            let cx = center_px.x + offset_x;
+            let cy = center_px.y + offset_y;
+
+            // Build the wedge path: move to center, line to arc start,
+            // approximate arc with cubic Beziers, close back to center.
+            let mut path = Path::new();
+            path.move_to(cx, cy);
+
+            let arc_start_x = cx + radius_px * current_angle.cos();
+            let arc_start_y = cy - radius_px * current_angle.sin();
+            path.line_to(arc_start_x, arc_start_y);
+
+            // Split the sweep into sub-arcs of at most 90 degrees.
+            let max_sub = std::f64::consts::FRAC_PI_2;
+            let num_segments = (sweep / max_sub).ceil() as usize;
+            let seg_sweep = sweep / num_segments as f64;
+            let mut seg_start = current_angle;
+
+            for _ in 0..num_segments {
+                let seg_end = seg_start + seg_sweep;
+                // Cubic Bezier approximation for a circular arc.
+                let half = seg_sweep / 2.0;
+                let alpha = (4.0 / 3.0) * (half / 2.0).tan();
+
+                let p0x = cx + radius_px * seg_start.cos();
+                let p0y = cy - radius_px * seg_start.sin();
+                let p3x = cx + radius_px * seg_end.cos();
+                let p3y = cy - radius_px * seg_end.sin();
+
+                // Tangent direction at start: perpendicular to radial.
+                let t0x = -seg_start.sin();
+                let t0y = -seg_start.cos(); // y inverted in pixel space
+                // Tangent direction at end: perpendicular to radial.
+                let t1x = -seg_end.sin();
+                let t1y = -seg_end.cos(); // y inverted in pixel space
+
+                let cp1x = p0x + alpha * radius_px * t0x;
+                let cp1y = p0y + alpha * radius_px * t0y;
+                let cp2x = p3x - alpha * radius_px * t1x;
+                let cp2y = p3y - alpha * radius_px * t1y;
+
+                let _ = path.curve_to(cp1x, cp1y, cp2x, cp2y, p3x, p3y);
+                seg_start = seg_end;
+            }
+
+            path.close();
+
+            let paint = Paint::new(wedge_color);
+            renderer.fill_path(&path, &paint, Affine::IDENTITY);
+
+            // Thin white outline for visual separation between wedges.
+            let outline_paint = Paint::new(Color::WHITE);
+            let outline_stroke = Stroke::new(1.5);
+            renderer.stroke_path(&path, &outline_paint, &outline_stroke, Affine::IDENTITY);
+
+            // Percentage label at the midpoint of the arc.
+            if artist.autopct {
+                let pct_r = radius_px * 0.6;
+                let pct_x = cx + pct_r * mid_angle.cos();
+                let pct_y = cy - pct_r * mid_angle.sin();
+                let pct_text = format!("{:.1}%", frac * 100.0);
+                renderer.draw_text(
+                    &pct_text,
+                    Point::new(pct_x, pct_y),
+                    &pct_style,
+                    Affine::IDENTITY,
+                );
+            }
+
+            // Wedge labels outside the arc.
+            if let Some(ref labels) = artist.labels {
+                if i < labels.len() {
+                    let label_r = radius_px * 1.15;
+                    let lx = cx + label_r * mid_angle.cos();
+                    let ly = cy - label_r * mid_angle.sin();
+                    renderer.draw_text(
+                        &labels[i],
+                        Point::new(lx, ly),
+                        &label_style,
+                        Affine::IDENTITY,
+                    );
+                }
+            }
+
+            current_angle += sweep;
+        }
+    }
+
     fn draw_legend(
         &self,
         renderer: &mut impl Renderer,
@@ -1968,6 +2717,7 @@ impl Axes {
                     Artist::BoxPlot(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::ErrorBar(a) => (a.label.as_deref(), a.color, SwatchKind::Line),
                     Artist::Heatmap(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Pie(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                 };
                 label.map(|l| LegendEntry { label: l.to_string(), color, swatch })
             })
@@ -2463,6 +3213,545 @@ mod tests {
             Artist::Stem(a) => assert!((a.baseline - (-3.0)).abs() < 1e-12),
             _ => panic!("expected Stem"),
         }
+    }
+
+    // -- Text annotation tests -----------------------------------------------
+
+    #[test]
+    fn text_creates_annotation() {
+        let mut ax = Axes::new();
+        ax.text(1.0, 2.0, "hello");
+        assert_eq!(ax.texts.len(), 1);
+        assert_eq!(ax.texts[0].text, "hello");
+        assert!((ax.texts[0].x - 1.0).abs() < f64::EPSILON);
+        assert!((ax.texts[0].y - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn text_default_alignment() {
+        let mut ax = Axes::new();
+        ax.text(0.0, 0.0, "test");
+        assert_eq!(ax.texts[0].ha, HAlign::Left);
+        assert_eq!(ax.texts[0].va, VAlign::Baseline);
+        assert!((ax.texts[0].rotation - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn text_builder_chaining() {
+        let mut ax = Axes::new();
+        ax.text(1.0, 2.0, "styled")
+            .fontsize(14.0)
+            .color(Color::TAB_RED)
+            .ha(HAlign::Center)
+            .va(VAlign::Top)
+            .rotation(45.0);
+        let t = &ax.texts[0];
+        assert_eq!(t.fontsize, Some(14.0));
+        assert_eq!(t.color, Some(Color::TAB_RED));
+        assert_eq!(t.ha, HAlign::Center);
+        assert_eq!(t.va, VAlign::Top);
+        assert!((t.rotation - 45.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn text_does_not_affect_autoscale() {
+        let mut ax = Axes::new();
+        ax.plot(vec![0.0, 1.0], vec![0.0, 1.0]).unwrap();
+        let limits_before = ax.compute_data_limits();
+        // Place text far outside the data range.
+        ax.text(100.0, 100.0, "far away");
+        let limits_after = ax.compute_data_limits();
+        assert_eq!(limits_before, limits_after);
+    }
+
+    #[test]
+    fn multiple_texts() {
+        let mut ax = Axes::new();
+        ax.text(1.0, 1.0, "first");
+        ax.text(2.0, 2.0, "second");
+        ax.text(3.0, 3.0, "third");
+        assert_eq!(ax.texts.len(), 3);
+        assert_eq!(ax.texts[0].text, "first");
+        assert_eq!(ax.texts[1].text, "second");
+        assert_eq!(ax.texts[2].text, "third");
+    }
+
+    // -- Annotation tests (annotate with arrow) ------------------------------
+
+    #[test]
+    fn annotate_creates_annotation() {
+        let mut ax = Axes::new();
+        ax.annotate("peak", (1.0, 2.0), (3.0, 4.0));
+        assert_eq!(ax.annotations.len(), 1);
+        assert_eq!(ax.annotations[0].text, "peak");
+        assert_eq!(ax.annotations[0].xy, (1.0, 2.0));
+        assert_eq!(ax.annotations[0].xytext, (3.0, 4.0));
+    }
+
+    #[test]
+    fn annotate_default_no_arrow() {
+        let mut ax = Axes::new();
+        ax.annotate("label", (0.0, 0.0), (1.0, 1.0));
+        assert_eq!(ax.annotations[0].arrowstyle, ArrowStyle::None);
+    }
+
+    #[test]
+    fn annotate_default_alignment() {
+        let mut ax = Axes::new();
+        ax.annotate("label", (0.0, 0.0), (1.0, 1.0));
+        assert_eq!(ax.annotations[0].ha, HAlign::Center);
+        assert_eq!(ax.annotations[0].va, VAlign::Bottom);
+    }
+
+    #[test]
+    fn annotate_with_arrow() {
+        let mut ax = Axes::new();
+        ax.annotate("peak", (1.0, 1.0), (2.0, 2.0))
+            .arrowstyle(ArrowStyle::Simple);
+        assert_eq!(ax.annotations[0].arrowstyle, ArrowStyle::Simple);
+    }
+
+    #[test]
+    fn annotate_with_fancy_arrow() {
+        let mut ax = Axes::new();
+        ax.annotate("label", (0.0, 0.0), (1.0, 1.0))
+            .arrowstyle(ArrowStyle::Fancy);
+        assert_eq!(ax.annotations[0].arrowstyle, ArrowStyle::Fancy);
+    }
+
+    #[test]
+    fn annotate_builder_chaining() {
+        let mut ax = Axes::new();
+        ax.annotate("note", (1.0, 2.0), (3.0, 4.0))
+            .fontsize(12.0)
+            .color(Color::TAB_BLUE)
+            .ha(HAlign::Right)
+            .va(VAlign::Top)
+            .arrowstyle(ArrowStyle::Fancy)
+            .arrow_color(Color::TAB_RED);
+        let a = &ax.annotations[0];
+        assert_eq!(a.fontsize, Some(12.0));
+        assert_eq!(a.color, Some(Color::TAB_BLUE));
+        assert_eq!(a.ha, HAlign::Right);
+        assert_eq!(a.va, VAlign::Top);
+        assert_eq!(a.arrowstyle, ArrowStyle::Fancy);
+        assert_eq!(a.arrow_color, Some(Color::TAB_RED));
+    }
+
+    #[test]
+    fn annotate_does_not_affect_autoscale() {
+        let mut ax = Axes::new();
+        ax.plot(vec![0.0, 1.0], vec![0.0, 1.0]).unwrap();
+        let limits_before = ax.compute_data_limits();
+        // Annotate far outside the data range.
+        ax.annotate("far", (100.0, 100.0), (200.0, 200.0));
+        let limits_after = ax.compute_data_limits();
+        assert_eq!(limits_before, limits_after);
+    }
+
+    #[test]
+    fn multiple_annotations() {
+        let mut ax = Axes::new();
+        ax.annotate("a", (0.0, 0.0), (1.0, 1.0));
+        ax.annotate("b", (2.0, 2.0), (3.0, 3.0));
+        assert_eq!(ax.annotations.len(), 2);
+    }
+
+    #[test]
+    fn text_at_plot_boundary() {
+        let mut ax = Axes::new();
+        ax.plot(vec![0.0, 10.0], vec![0.0, 10.0]).unwrap();
+        // Place text at the boundary of the data range.
+        ax.text(0.0, 0.0, "origin");
+        ax.text(10.0, 10.0, "corner");
+        assert_eq!(ax.texts.len(), 2);
+    }
+
+    #[test]
+    fn overlapping_annotations() {
+        let mut ax = Axes::new();
+        // Multiple annotations at the same position -- should not panic.
+        ax.annotate("one", (5.0, 5.0), (6.0, 6.0));
+        ax.annotate("two", (5.0, 5.0), (6.0, 6.0));
+        ax.text(6.0, 6.0, "three");
+        assert_eq!(ax.annotations.len(), 2);
+        assert_eq!(ax.texts.len(), 1);
+    }
+
+    #[test]
+    fn new_axes_has_empty_annotations() {
+        let ax = Axes::new();
+        assert!(ax.texts.is_empty());
+        assert!(ax.annotations.is_empty());
+    }
+
+    #[test]
+    fn text_pixel_placement() {
+        // Verify that text annotations are positioned using data_to_pixel.
+        let ax = Axes::new();
+        let plot_area = Rect::new(100.0, 50.0, 400.0, 300.0);
+        // Center of data space (5, 5) with limits (0, 10, 0, 10).
+        let pt = ax.data_to_pixel(5.0, 5.0, &plot_area, 0.0, 10.0, 0.0, 10.0);
+        assert!((pt.x - 300.0).abs() < 1e-10);
+        assert!((pt.y - 200.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn annotation_pixel_placement() {
+        // Verify pixel positions for both xy and xytext.
+        let ax = Axes::new();
+        let plot_area = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let target = ax.data_to_pixel(0.0, 0.0, &plot_area, 0.0, 10.0, 0.0, 10.0);
+        let text_pos = ax.data_to_pixel(5.0, 5.0, &plot_area, 0.0, 10.0, 0.0, 10.0);
+        // target at (0, 0) data -> pixel (0, 100) in a y-inverted 100x100 area.
+        assert!((target.x - 0.0).abs() < 1e-10);
+        assert!((target.y - 100.0).abs() < 1e-10);
+        // text at (5, 5) data -> pixel (50, 50).
+        assert!((text_pos.x - 50.0).abs() < 1e-10);
+        assert!((text_pos.y - 50.0).abs() < 1e-10);
+    }
+
+    // -- Axis control tests ------------------------------------------------
+
+    #[test]
+    fn set_xlim_overrides_autoscale() {
+        let mut ax = Axes::new();
+        ax.plot(vec![0.0, 10.0], vec![0.0, 10.0]).unwrap();
+        ax.set_xlim(2.0, 8.0);
+        let (xmin, xmax, _, _) = ax.compute_data_limits();
+        assert!((xmin - 2.0).abs() < f64::EPSILON);
+        assert!((xmax - 8.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn set_ylim_overrides_autoscale() {
+        let mut ax = Axes::new();
+        ax.plot(vec![0.0, 10.0], vec![0.0, 10.0]).unwrap();
+        ax.set_ylim(-5.0, 15.0);
+        let (_, _, ymin, ymax) = ax.compute_data_limits();
+        assert!((ymin - (-5.0)).abs() < f64::EPSILON);
+        assert!((ymax - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn set_xlim_with_min_greater_than_max() {
+        let mut ax = Axes::new();
+        ax.set_xlim(10.0, 2.0);
+        let (xmin, xmax, _, _) = ax.compute_data_limits();
+        // User limits are stored as-is; inversion happens separately.
+        assert!((xmin - 10.0).abs() < f64::EPSILON);
+        assert!((xmax - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn invert_xaxis_swaps_limits() {
+        let mut ax = Axes::new();
+        ax.plot(vec![0.0, 10.0], vec![0.0, 10.0]).unwrap();
+        ax.set_xlim(0.0, 10.0);
+        ax.invert_xaxis();
+        let (xmin, xmax, _, _) = ax.compute_data_limits();
+        // After inversion, min and max are swapped.
+        assert!((xmin - 10.0).abs() < f64::EPSILON);
+        assert!((xmax - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn invert_yaxis_swaps_limits() {
+        let mut ax = Axes::new();
+        ax.set_ylim(0.0, 100.0);
+        ax.invert_yaxis();
+        let (_, _, ymin, ymax) = ax.compute_data_limits();
+        assert!((ymin - 100.0).abs() < f64::EPSILON);
+        assert!((ymax - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn custom_xticks_appear_in_output() {
+        let mut ax = Axes::new();
+        ax.set_xticks(&[1.0, 2.0, 3.0]);
+        let ticks = ax.resolve_xticks(0.0, 10.0);
+        assert_eq!(ticks.len(), 3);
+        assert!((ticks[0].value - 1.0).abs() < f64::EPSILON);
+        assert!((ticks[1].value - 2.0).abs() < f64::EPSILON);
+        assert!((ticks[2].value - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn custom_yticks_appear_in_output() {
+        let mut ax = Axes::new();
+        ax.set_yticks(&[0.0, 50.0, 100.0]);
+        let ticks = ax.resolve_yticks(0.0, 100.0);
+        assert_eq!(ticks.len(), 3);
+        assert!((ticks[0].value - 0.0).abs() < f64::EPSILON);
+        assert!((ticks[1].value - 50.0).abs() < f64::EPSILON);
+        assert!((ticks[2].value - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn custom_tick_labels_override_default_format() {
+        let mut ax = Axes::new();
+        ax.set_xticks(&[0.0, 3.125, 6.25]);
+        ax.set_xticklabels(&["0", "pi", "2pi"]);
+        let ticks = ax.resolve_xticks(0.0, 7.0);
+        assert_eq!(ticks.len(), 3);
+        assert_eq!(ticks[0].label, "0");
+        assert_eq!(ticks[1].label, "pi");
+        assert_eq!(ticks[2].label, "2pi");
+    }
+
+    #[test]
+    fn custom_tick_labels_partial_match() {
+        // Fewer labels than ticks: missing labels fall back to format_tick.
+        let mut ax = Axes::new();
+        ax.set_xticks(&[1.0, 2.0, 3.0]);
+        ax.set_xticklabels(&["one"]);
+        let ticks = ax.resolve_xticks(0.0, 5.0);
+        assert_eq!(ticks[0].label, "one");
+        assert_eq!(ticks[1].label, "2");
+        assert_eq!(ticks[2].label, "3");
+    }
+
+    #[test]
+    fn empty_custom_ticks() {
+        let mut ax = Axes::new();
+        ax.set_xticks(&[]);
+        let ticks = ax.resolve_xticks(0.0, 10.0);
+        assert!(ticks.is_empty());
+    }
+
+    #[test]
+    fn grid_visibility_toggle() {
+        let mut ax = Axes::new();
+        assert!(ax.show_grid.is_none());
+        ax.grid(true);
+        assert_eq!(ax.show_grid, Some(true));
+        ax.grid(false);
+        assert_eq!(ax.show_grid, Some(false));
+    }
+
+    #[test]
+    fn grid_axis_setting() {
+        let mut ax = Axes::new();
+        assert_eq!(ax.grid_axis, GridAxis::Both);
+        ax.grid_axis("x");
+        assert_eq!(ax.grid_axis, GridAxis::X);
+        ax.grid_axis("y");
+        assert_eq!(ax.grid_axis, GridAxis::Y);
+        ax.grid_axis("both");
+        assert_eq!(ax.grid_axis, GridAxis::Both);
+    }
+
+    #[test]
+    fn grid_alpha_setting() {
+        let mut ax = Axes::new();
+        ax.grid_alpha(0.5);
+        assert!((ax.grid_alpha.unwrap() - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn grid_alpha_clamps() {
+        let mut ax = Axes::new();
+        ax.grid_alpha(2.0);
+        assert!((ax.grid_alpha.unwrap() - 1.0).abs() < f64::EPSILON);
+        ax.grid_alpha(-0.5);
+        assert!((ax.grid_alpha.unwrap() - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn grid_style_setting() {
+        let mut ax = Axes::new();
+        ax.grid_style(crate::theme::LineStyle::Dashed);
+        assert_eq!(ax.grid_style, Some(crate::theme::LineStyle::Dashed));
+    }
+
+    #[test]
+    fn tick_rotation_setting() {
+        let mut ax = Axes::new();
+        assert!((ax.xtick_rotation - 0.0).abs() < f64::EPSILON);
+        ax.tick_params_x_rotation(45.0);
+        assert!((ax.xtick_rotation - 45.0).abs() < f64::EPSILON);
+        ax.tick_params_y_rotation(-30.0);
+        assert!((ax.ytick_rotation - (-30.0)).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn axis_control_chaining() {
+        let mut ax = Axes::new();
+        ax.set_xlim(0.0, 10.0)
+            .set_ylim(-1.0, 1.0)
+            .invert_xaxis()
+            .grid(true)
+            .grid_axis("y")
+            .grid_alpha(0.3)
+            .grid_style(crate::theme::LineStyle::Dotted)
+            .set_xticks(&[0.0, 5.0, 10.0])
+            .set_xticklabels(&["start", "mid", "end"])
+            .tick_params_x_rotation(90.0);
+
+        assert_eq!(ax.xlim, Some((0.0, 10.0)));
+        assert_eq!(ax.ylim, Some((-1.0, 1.0)));
+        assert!(ax.x_inverted);
+        assert_eq!(ax.show_grid, Some(true));
+        assert_eq!(ax.grid_axis, GridAxis::Y);
+        assert!((ax.grid_alpha.unwrap() - 0.3).abs() < f64::EPSILON);
+        assert_eq!(ax.grid_style, Some(crate::theme::LineStyle::Dotted));
+        assert_eq!(ax.custom_xticks.as_ref().unwrap().len(), 3);
+        assert_eq!(ax.custom_xticklabels.as_ref().unwrap().len(), 3);
+        assert!((ax.xtick_rotation - 90.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn new_axes_has_axis_control_defaults() {
+        let ax = Axes::new();
+        assert_eq!(ax.grid_axis, GridAxis::Both);
+        assert!(ax.grid_alpha.is_none());
+        assert!(ax.grid_style.is_none());
+        assert!(!ax.x_inverted);
+        assert!(!ax.y_inverted);
+        assert!(ax.custom_xticks.is_none());
+        assert!(ax.custom_yticks.is_none());
+        assert!(ax.custom_xticklabels.is_none());
+        assert!(ax.custom_yticklabels.is_none());
+        assert!((ax.xtick_rotation - 0.0).abs() < f64::EPSILON);
+        assert!((ax.ytick_rotation - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn autoscale_not_broken_without_user_limits() {
+        let mut ax = Axes::new();
+        ax.plot(vec![1.0, 5.0, 10.0], vec![2.0, 8.0, 3.0]).unwrap();
+        let (xmin, xmax, ymin, ymax) = ax.compute_data_limits();
+        // Autoscale should still pad around data.
+        assert!(xmin < 1.0);
+        assert!(xmax > 10.0);
+        assert!(ymin < 2.0);
+        assert!(ymax > 8.0);
+    }
+
+    #[test]
+    fn resolve_xticks_auto_when_not_set() {
+        let ax = Axes::new();
+        let ticks = ax.resolve_xticks(0.0, 10.0);
+        // Should produce auto-generated ticks (non-empty).
+        assert!(!ticks.is_empty());
+    }
+
+    #[test]
+    fn resolve_yticks_auto_when_not_set() {
+        let ax = Axes::new();
+        let ticks = ax.resolve_yticks(0.0, 100.0);
+        assert!(!ticks.is_empty());
+    }
+
+    // -- Log scale tests ---------------------------------------------------
+
+    #[test]
+    fn data_to_pixel_log10() {
+        let mut ax = Axes::new();
+        ax.set_xscale(Scale::Log10);
+        let plot_area = Rect::new(100.0, 50.0, 400.0, 300.0);
+
+        // 1.0 maps to the left edge in [1, 1000] log range.
+        let p = ax.data_to_pixel(1.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
+        assert!((p.x - 100.0).abs() < 1e-6, "log10(1)=0 should be left edge, got {}", p.x);
+
+        // 1000 maps to the right edge.
+        let p = ax.data_to_pixel(1000.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
+        assert!((p.x - 500.0).abs() < 1e-6, "log10(1000)=3 should be right edge, got {}", p.x);
+
+        // 10 is 1/3 of the way (log10(10)=1 out of 3 decades).
+        let p = ax.data_to_pixel(10.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
+        let expected_x = 100.0 + 400.0 / 3.0;
+        assert!((p.x - expected_x).abs() < 1e-6, "log10(10)=1/3 of range, expected {}, got {}", expected_x, p.x);
+
+        // 100 is 2/3 of the way.
+        let p = ax.data_to_pixel(100.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
+        let expected_x = 100.0 + 400.0 * 2.0 / 3.0;
+        assert!((p.x - expected_x).abs() < 1e-6, "log10(100)=2/3 of range, expected {}, got {}", expected_x, p.x);
+    }
+
+    #[test]
+    fn data_to_pixel_log10_y() {
+        let mut ax = Axes::new();
+        ax.set_yscale(Scale::Log10);
+        let plot_area = Rect::new(0.0, 0.0, 400.0, 300.0);
+
+        // ymin=1, ymax=100 (2 decades). y=10 is the midpoint.
+        let p = ax.data_to_pixel(0.0, 10.0, &plot_area, 0.0, 10.0, 1.0, 100.0);
+        // ty = (log10(10) - log10(1)) / (log10(100) - log10(1)) = 1/2 = 0.5
+        // pixel_y = 0 + (1 - 0.5) * 300 = 150
+        assert!((p.y - 150.0).abs() < 1e-6, "log10(10) should be vertical center, got {}", p.y);
+    }
+
+    #[test]
+    fn compute_data_limits_log_clamps_positive() {
+        let mut ax = Axes::new();
+        ax.set_xscale(Scale::Log10);
+        ax.set_yscale(Scale::Log10);
+        ax.plot(vec![0.1, 1.0, 10.0], vec![1.0, 10.0, 100.0]).unwrap();
+        let (xmin, xmax, ymin, ymax) = ax.compute_data_limits();
+        assert!(xmin > 0.0, "log x-min must be positive, got {}", xmin);
+        assert!(xmax > xmin, "log x-max must be > x-min");
+        assert!(ymin > 0.0, "log y-min must be positive, got {}", ymin);
+        assert!(ymax > ymin, "log y-max must be > y-min");
+    }
+
+    #[test]
+    fn compute_data_limits_log_with_zeros() {
+        // Data includes zero, which is invalid for log10 -- should clamp.
+        let mut ax = Axes::new();
+        ax.set_xscale(Scale::Log10);
+        ax.plot(vec![0.0, 1.0, 10.0], vec![1.0, 2.0, 3.0]).unwrap();
+        let (xmin, xmax, _ymin, _ymax) = ax.compute_data_limits();
+        assert!(xmin > 0.0, "log x-min should be clamped positive, got {}", xmin);
+        assert!(xmax > xmin);
+    }
+
+    #[test]
+    fn data_to_pixel_symlog() {
+        let mut ax = Axes::new();
+        ax.set_xscale(Scale::SymLog { linthresh: 1.0 });
+        let plot_area = Rect::new(0.0, 0.0, 400.0, 300.0);
+
+        // For a symmetric range [-100, 100], zero should be at the center.
+        let p = ax.data_to_pixel(0.0, 0.0, &plot_area, -100.0, 100.0, 0.0, 1.0);
+        assert!((p.x - 200.0).abs() < 1e-6, "symlog(0) should be center for symmetric range, got {}", p.x);
+    }
+
+    #[test]
+    fn set_scale_methods_return_self() {
+        let mut ax = Axes::new();
+        ax.set_xscale(Scale::Log10)
+            .set_yscale(Scale::Log10)
+            .set_title("Log plot");
+        assert!(matches!(ax.xscale, Scale::Log10));
+        assert!(matches!(ax.yscale, Scale::Log10));
+        assert_eq!(ax.title.as_deref(), Some("Log plot"));
+    }
+
+    #[test]
+    fn compute_data_limits_log_no_artists() {
+        let mut ax = Axes::new();
+        ax.set_xscale(Scale::Log10);
+        ax.set_yscale(Scale::Log10);
+        let (xmin, xmax, ymin, ymax) = ax.compute_data_limits();
+        assert!(xmin > 0.0, "default log x-min must be positive");
+        assert!(xmax > xmin);
+        assert!(ymin > 0.0, "default log y-min must be positive");
+        assert!(ymax > ymin);
+    }
+
+    #[test]
+    fn data_to_pixel_log10_very_large_range() {
+        let mut ax = Axes::new();
+        ax.set_xscale(Scale::Log10);
+        let plot_area = Rect::new(0.0, 0.0, 1000.0, 100.0);
+
+        // 10 decades: 1e-5 to 1e5
+        let p_lo = ax.data_to_pixel(1e-5, 0.0, &plot_area, 1e-5, 1e5, 0.0, 1.0);
+        let p_hi = ax.data_to_pixel(1e5, 0.0, &plot_area, 1e-5, 1e5, 0.0, 1.0);
+        assert!((p_lo.x - 0.0).abs() < 1e-6);
+        assert!((p_hi.x - 1000.0).abs() < 1e-6);
     }
 
 }

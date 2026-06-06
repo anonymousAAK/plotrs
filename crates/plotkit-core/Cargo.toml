@@ -1,6 +1,6 @@
 [package]
 name = "plotkit-core"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Core types and logic for the plotkit plotting library"
@@ -10,6 +10,12 @@ repository = "https://github.com/anonymousAAK/plotrs"
 [dependencies]
 kurbo = "0.11"
 colorous = "1"
+ndarray = { version = "0.16", optional = true }
+polars = { version = "0.46", default-features = false, optional = true }
+
+[features]
+ndarray = ["dep:ndarray"]
+polars = ["dep:polars"]
 
 [dev-dependencies]
 insta = { version = "1", features = ["glob"] }

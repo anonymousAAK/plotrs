@@ -89,6 +89,22 @@ pub enum Loc {
 }
 
 // ---------------------------------------------------------------------------
+// GridAxis
+// ---------------------------------------------------------------------------
+
+/// Which axes should display grid lines.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum GridAxis {
+    /// Grid lines for the x-axis only (vertical lines at each x-tick).
+    X,
+    /// Grid lines for the y-axis only (horizontal lines at each y-tick).
+    Y,
+    /// Grid lines for both axes (the default).
+    #[default]
+    Both,
+}
+
+// ---------------------------------------------------------------------------
 // TickDirection
 // ---------------------------------------------------------------------------
 
@@ -626,5 +642,10 @@ mod tests {
         let t = Theme::publication();
         assert_eq!(t.figure_background, Color::WHITE);
         assert_eq!(t.axes_background, Color::WHITE);
+    }
+
+    #[test]
+    fn grid_axis_default_is_both() {
+        assert_eq!(GridAxis::default(), GridAxis::Both);
     }
 }

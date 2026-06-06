@@ -16,12 +16,14 @@
 //! | [`Bar`]          | Vertical or horizontal bars over categories.     |
 //! | [`Histogram`]    | Binned frequency distribution of a single series.|
 //! | [`FillBetween`]  | Shaded region between two y-series.              |
+//! | [`Pie`]          | A pie chart showing proportional wedge slices.   |
 //!
 //! [`Line`]: Artist::Line
 //! [`Scatter`]: Artist::Scatter
 //! [`Bar`]: Artist::Bar
 //! [`Histogram`]: Artist::Histogram
 //! [`FillBetween`]: Artist::FillBetween
+//! [`Pie`]: Artist::Pie
 
 use crate::charts::boxplot::BoxStats;
 use crate::colormap::Colormap;
@@ -62,6 +64,8 @@ pub enum Artist {
     ErrorBar(ErrorBarArtist),
     /// A heatmap showing a 2D grid of values mapped to colors.
     Heatmap(HeatmapArtist),
+    /// A pie chart showing proportional wedge slices.
+    Pie(PieArtist),
 }
 
 
@@ -83,6 +87,7 @@ impl Artist {
             Artist::BoxPlot(a) => a.label.as_deref(),
             Artist::ErrorBar(a) => a.label.as_deref(),
             Artist::Heatmap(a) => a.label.as_deref(),
+            Artist::Pie(a) => a.label.as_deref(),
         }
     }
 
@@ -103,6 +108,7 @@ impl Artist {
             Artist::BoxPlot(a) => a.color,
             Artist::ErrorBar(a) => a.color,
             Artist::Heatmap(a) => a.color,
+            Artist::Pie(a) => a.color,
         }
     }
 
@@ -125,6 +131,7 @@ impl Artist {
             Artist::BoxPlot(a) => a.data_bounds(),
             Artist::ErrorBar(a) => a.data_bounds(),
             Artist::Heatmap(a) => a.data_bounds(),
+            Artist::Pie(a) => a.data_bounds(),
         }
     }
 }
@@ -619,6 +626,58 @@ impl HeatmapArtist {
             return (0.0, 1.0, 0.0, 1.0);
         }
         (0.0, ncols as f64, 0.0, nrows as f64)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PieArtist
+// ---------------------------------------------------------------------------
+
+/// A pie chart rendering proportional wedge slices from a set of sizes.
+///
+/// Each entry in `sizes` is automatically normalised so that the wedges
+/// sum to a full circle. The starting angle, explode offsets, and colors
+/// can be customised through the builder API.
+#[derive(Debug, Clone)]
+pub struct PieArtist {
+    /// Wedge sizes (auto-normalised to sum to 1.0 during rendering).
+    pub sizes: Vec<f64>,
+    /// Optional labels for each wedge, drawn outside the wedge arc.
+    pub labels: Option<Vec<String>>,
+    /// Optional custom colors for each wedge. When `None`, the theme
+    /// color cycle is used.
+    pub colors: Option<Vec<Color>>,
+    /// Optional explode offset for each wedge, as a fraction of the
+    /// radius. A value of `0.0` means no offset.
+    pub explode: Option<Vec<f64>>,
+    /// When `true`, percentage labels are drawn at the midpoint of each
+    /// wedge arc.
+    pub autopct: bool,
+    /// Starting angle in degrees, counter-clockwise from the positive
+    /// x-axis. Default is `90.0` (top of the circle).
+    pub start_angle: f64,
+    /// Radius of the pie in data-space units. Default is `1.0`.
+    pub radius: f64,
+    /// Optional legend label. When `Some`, the pie appears in the legend.
+    pub label: Option<String>,
+    /// Primary color (used for legend swatch when no custom colors are set).
+    pub color: Color,
+}
+
+impl PieArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// Returns a fixed square region that accommodates the pie radius plus
+    /// any explode offsets, with a small margin so that labels do not get
+    /// clipped.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        let max_explode = self
+            .explode
+            .as_ref()
+            .map(|e| e.iter().copied().fold(0.0_f64, f64::max))
+            .unwrap_or(0.0);
+        let extent = self.radius * (1.0 + max_explode) + 0.1 * self.radius;
+        (-extent, extent, -extent, extent)
     }
 }
 

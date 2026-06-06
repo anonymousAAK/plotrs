@@ -62,10 +62,11 @@ pub fn generate_ticks(
     scale: &Scale,
 ) -> Vec<Tick> {
     let tick_set = match scale {
-        Scale::Linear | Scale::SymLog { .. } => {
-            generate_linear_ticks(data_min, data_max, target_count)
-        }
+        Scale::Linear => generate_linear_ticks(data_min, data_max, target_count),
         Scale::Log10 => generate_log_ticks(data_min, data_max, target_count),
+        Scale::SymLog { linthresh } => {
+            generate_symlog_ticks(data_min, data_max, target_count, *linthresh)
+        }
     };
     tick_set.into_ticks()
 }
@@ -353,9 +354,119 @@ fn generate_log_ticks(data_min: f64, data_max: f64, target_count: usize) -> Tick
     make_tick_set(positions)
 }
 
+/// Generates minor tick positions for a log10 scale.
+///
+/// Minor ticks are placed at multiples 2, 3, 4, 5, 6, 7, 8, 9 of each power
+/// of 10 within the given data range. These are the sub-decade ticks that give
+/// log-scale plots their characteristic visual pattern.
+///
+/// Returns only positions (no labels), since minor ticks are typically drawn
+/// without labels.
+pub fn generate_log_minor_ticks(data_min: f64, data_max: f64) -> Vec<f64> {
+    let lo = data_min.max(f64::EPSILON);
+    let hi = data_max.max(lo);
+
+    let log_lo = lo.log10().floor() as i32;
+    let log_hi = hi.log10().ceil() as i32;
+
+    let mut positions = Vec::new();
+
+    for exp in log_lo..=log_hi {
+        let base = 10.0_f64.powi(exp);
+        for mult in 2..=9 {
+            let val = base * mult as f64;
+            if val >= lo * 0.999 && val <= hi * 1.001 {
+                positions.push(val);
+            }
+        }
+    }
+
+    positions
+}
+
+/// Generates ticks for a symlog (symmetric log) scale.
+///
+/// Produces ticks that reflect the symmetry of the symlog transform: logarithmic
+/// ticks for the positive and negative regions beyond `linthresh`, and linear
+/// ticks in the `[-linthresh, linthresh]` region.
+fn generate_symlog_ticks(data_min: f64, data_max: f64, target_count: usize, linthresh: f64) -> TickSet {
+    // Guard: if linthresh is non-positive or non-finite, fall back to linear ticks.
+    if linthresh <= 0.0 || !linthresh.is_finite() {
+        return generate_linear_ticks(data_min, data_max, target_count);
+    }
+
+    let mut positions = Vec::new();
+
+    // Always include zero if the range crosses it.
+    if data_min <= 0.0 && data_max >= 0.0 {
+        positions.push(0.0);
+    }
+
+    // Add +-linthresh markers if they fall within the range.
+    if linthresh <= data_max && linthresh >= data_min {
+        positions.push(linthresh);
+    }
+    if -linthresh >= data_min && -linthresh <= data_max {
+        positions.push(-linthresh);
+    }
+
+    // Positive logarithmic region: powers of 10 beyond linthresh.
+    if data_max > linthresh {
+        let log_lo = linthresh.log10().ceil() as i32;
+        let log_hi = data_max.abs().log10().ceil() as i32;
+        for exp in log_lo..=log_hi {
+            let val = 10.0_f64.powi(exp);
+            if val > linthresh && val <= data_max * 1.001 {
+                positions.push(val);
+            }
+        }
+    }
+
+    // Negative logarithmic region: negative powers of 10 beyond -linthresh.
+    if data_min < -linthresh {
+        let log_lo = linthresh.log10().ceil() as i32;
+        let log_hi = data_min.abs().log10().ceil() as i32;
+        for exp in log_lo..=log_hi {
+            let val = -10.0_f64.powi(exp);
+            if val < -linthresh && val >= data_min * 1.001 {
+                positions.push(val);
+            }
+        }
+    }
+
+    // If the linear region is significant, add a few linear ticks within it.
+    let lin_lo = data_min.max(-linthresh);
+    let lin_hi = data_max.min(linthresh);
+    if lin_hi > lin_lo {
+        let lin_ticks = generate_linear_ticks(lin_lo, lin_hi, (target_count / 3).max(2));
+        for &pos in &lin_ticks.positions {
+            positions.push(pos);
+        }
+    }
+
+    // Deduplicate and sort.
+    positions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    positions.dedup_by(|a, b| (*a - *b).abs() < f64::EPSILON * 100.0);
+
+    // If we ended up with too few ticks, fall back to linear.
+    if positions.len() < 2 {
+        return generate_linear_ticks(data_min, data_max, target_count);
+    }
+
+    make_tick_set(positions)
+}
+
 // ---------------------------------------------------------------------------
 // Tick formatting
 // ---------------------------------------------------------------------------
+
+/// Formats a single tick value to a compact, human-readable string.
+///
+/// This is the public entry point used when custom tick positions are set
+/// without explicit labels. Delegates to the internal `format_tick` function.
+pub fn format_tick_value(value: f64) -> String {
+    format_tick(value)
+}
 
 /// Formats a tick value to a compact string.
 ///
@@ -869,5 +980,128 @@ mod tests {
         assert_eq!(ticks[1].label, "5");
         assert_eq!(ticks[2].value, 10.0);
         assert_eq!(ticks[2].label, "10");
+    }
+
+    // -----------------------------------------------------------------------
+    // Log10 tick generation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn log_ticks_powers_of_10() {
+        // Range spanning 4 decades: should produce ticks at powers of 10.
+        let ticks = generate_ticks(1.0, 10_000.0, 7, &Scale::Log10);
+        assert_nice(&ticks);
+        let pos = positions(&ticks);
+        // Must include 1, 10, 100, 1000, 10000 (or at least the endpoints).
+        assert!(pos.contains(&1.0), "should include 10^0 = 1: {:?}", pos);
+        assert!(pos.contains(&10.0), "should include 10^1 = 10: {:?}", pos);
+        assert!(pos.contains(&100.0), "should include 10^2 = 100: {:?}", pos);
+        assert!(pos.contains(&1000.0), "should include 10^3 = 1000: {:?}", pos);
+        assert!(pos.contains(&10000.0), "should include 10^4 = 10000: {:?}", pos);
+    }
+
+    #[test]
+    fn log_ticks_all_positive() {
+        let ticks = generate_ticks(0.01, 1_000_000.0, 7, &Scale::Log10);
+        for t in &ticks {
+            assert!(t.value > 0.0, "log tick must be positive, got {}", t.value);
+        }
+    }
+
+    #[test]
+    fn log_ticks_large_range() {
+        // 10 decades.
+        let ticks = generate_ticks(1e-5, 1e5, 7, &Scale::Log10);
+        assert_nice(&ticks);
+        assert!(ticks.len() >= 3, "should have at least 3 ticks: {:?}", positions(&ticks));
+    }
+
+    #[test]
+    fn log_ticks_small_values() {
+        let ticks = generate_ticks(0.001, 0.1, 5, &Scale::Log10);
+        assert!(!ticks.is_empty());
+        for t in &ticks {
+            assert!(t.value > 0.0);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Log minor ticks
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn log_minor_ticks_basic() {
+        let minor = generate_log_minor_ticks(1.0, 100.0);
+        // Between 1 and 10: should have 2,3,4,5,6,7,8,9
+        // Between 10 and 100: should have 20,30,40,50,60,70,80,90
+        assert!(!minor.is_empty());
+        assert!(minor.contains(&2.0), "should include 2: {:?}", minor);
+        assert!(minor.contains(&5.0), "should include 5: {:?}", minor);
+        assert!(minor.contains(&9.0), "should include 9: {:?}", minor);
+        assert!(minor.contains(&20.0), "should include 20: {:?}", minor);
+        assert!(minor.contains(&50.0), "should include 50: {:?}", minor);
+        assert!(minor.contains(&90.0), "should include 90: {:?}", minor);
+    }
+
+    #[test]
+    fn log_minor_ticks_all_positive() {
+        let minor = generate_log_minor_ticks(0.01, 1000.0);
+        for &v in &minor {
+            assert!(v > 0.0, "minor tick must be positive, got {}", v);
+        }
+    }
+
+    #[test]
+    fn log_minor_ticks_sorted() {
+        let minor = generate_log_minor_ticks(1.0, 10000.0);
+        for w in minor.windows(2) {
+            assert!(w[1] >= w[0], "minor ticks not sorted: {} before {}", w[0], w[1]);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // SymLog tick generation (dedicated)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn symlog_ticks_include_zero_dedicated() {
+        let ticks = generate_ticks(-100.0, 100.0, 7, &Scale::SymLog { linthresh: 1.0 });
+        let pos = positions(&ticks);
+        assert!(pos.contains(&0.0), "symlog ticks should include zero: {:?}", pos);
+    }
+
+    #[test]
+    fn symlog_ticks_include_linthresh() {
+        let ticks = generate_ticks(-1000.0, 1000.0, 7, &Scale::SymLog { linthresh: 10.0 });
+        let pos = positions(&ticks);
+        assert!(pos.contains(&10.0), "should include +linthresh=10: {:?}", pos);
+        assert!(pos.contains(&-10.0), "should include -linthresh=-10: {:?}", pos);
+    }
+
+    #[test]
+    fn symlog_ticks_sorted_dedicated() {
+        let ticks = generate_ticks(-1000.0, 1000.0, 7, &Scale::SymLog { linthresh: 1.0 });
+        assert_nice(&ticks);
+    }
+
+    #[test]
+    fn symlog_ticks_positive_only() {
+        let ticks = generate_ticks(0.1, 10000.0, 7, &Scale::SymLog { linthresh: 1.0 });
+        assert!(!ticks.is_empty());
+        assert_nice(&ticks);
+    }
+
+    #[test]
+    fn symlog_ticks_negative_only() {
+        let ticks = generate_ticks(-10000.0, -0.1, 7, &Scale::SymLog { linthresh: 1.0 });
+        assert!(!ticks.is_empty());
+        assert_nice(&ticks);
+    }
+
+    #[test]
+    fn symlog_ticks_degenerate() {
+        // Entirely within linear region.
+        let ticks = generate_ticks(-0.5, 0.5, 5, &Scale::SymLog { linthresh: 1.0 });
+        assert!(!ticks.is_empty());
     }
 }
