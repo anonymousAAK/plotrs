@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "plotkit"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.75"
 description = "A matplotlib-shaped, publication-quality plotting library for Rust"
@@ -17,11 +17,11 @@ keywords = ["plotting", "chart", "visualization", "svg", "matplotlib"]
 categories = ["visualization", "science", "multimedia::images"]
 
 [dependencies]
-plotkit-core = { path = "crates/plotkit-core", version = "0.3.0" }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.3.0" }
-plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.3.0", optional = true }
-plotkit-ndarray = { path = "crates/plotkit-ndarray", version = "0.3.0", optional = true }
-plotkit-polars = { path = "crates/plotkit-polars", version = "0.3.0", optional = true }
+plotkit-core = { path = "crates/plotkit-core", version = "0.4.0" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.4.0" }
+plotkit-render-svg = { path = "crates/plotkit-render-svg", version = "0.4.0", optional = true }
+plotkit-ndarray = { path = "crates/plotkit-ndarray", version = "0.4.0", optional = true }
+plotkit-polars = { path = "crates/plotkit-polars", version = "0.4.0", optional = true }
 base64 = { version = "0.22", optional = true }
 
 [features]
@@ -106,10 +106,38 @@ path = "examples/15_logscale.rs"
 name = "16_axis_control"
 path = "examples/16_axis_control.rs"
 
+[[example]]
+name = "17_violin"
+path = "examples/17_violin.rs"
+
+[[example]]
+name = "17_colorbar"
+path = "examples/17_colorbar.rs"
+
+[[example]]
+name = "17_twinx"
+path = "examples/17_twinx.rs"
+
+[[example]]
+name = "17_contour"
+path = "examples/17_contour.rs"
+
+[[example]]
+name = "17_pdf"
+path = "examples/17_pdf.rs"
+
+[[example]]
+name = "18_stacked_bar"
+path = "examples/18_stacked_bar.rs"
+
+[[example]]
+name = "19_grouped_bar"
+path = "examples/19_grouped_bar.rs"
+
 [dev-dependencies]
 insta = { version = "1", features = ["glob"] }
 criterion = { version = "0.5", features = ["html_reports"] }
-plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.3.0" }
+plotkit-render-skia = { path = "crates/plotkit-render-skia", version = "0.4.0" }
 
 [[bench]]
 name = "render_benchmarks"

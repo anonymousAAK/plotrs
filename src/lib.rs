@@ -40,9 +40,9 @@ pub use plotkit_ndarray;
 #[cfg(feature = "polars")]
 pub use plotkit_polars;
 
-pub use plotkit_core::{primitives, renderer, error, series, scale, ticks, theme, layout, artist, annotations, axes, figure, legend, charts, colormap};
+pub use plotkit_core::{primitives, renderer, error, series, scale, ticks, theme, layout, artist, annotations, axes, figure, legend, charts, colormap, colorbar};
 pub use plotkit_core::figure::Figure;
-pub use plotkit_core::axes::Axes;
+pub use plotkit_core::axes::{Axes, TwinSide};
 pub use plotkit_core::primitives::Color;
 pub use plotkit_core::theme::{Theme, LineStyle, Marker, Loc, GridAxis};
 pub use plotkit_core::scale::Scale;

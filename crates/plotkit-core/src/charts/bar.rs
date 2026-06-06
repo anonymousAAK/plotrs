@@ -61,4 +61,45 @@ impl BarArtist {
         self.bar_width = width.clamp(0.1, 1.0);
         self
     }
+
+    /// Sets the bottom offset for each bar (for stacking).
+    ///
+    /// When stacking multiple bar series, set `bottom` for each subsequent
+    /// series to the cumulative heights of the series below it. Each bar
+    /// then starts at `bottom[i]` instead of `0.0` and extends to
+    /// `bottom[i] + height[i]`.
+    ///
+    /// # Arguments
+    ///
+    /// * `bottom` - A vector of base offsets, one per bar. Must have the same
+    ///   length as the heights vector.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Stack series B on top of series A:
+    /// ax.bar(cats, &heights_a)?.label("A");
+    /// ax.bar(cats, &heights_b)?.bottom(heights_a.clone()).label("B");
+    /// ```
+    pub fn bottom(&mut self, bottom: Vec<f64>) -> &mut Self {
+        self.bottom = Some(bottom);
+        self
+    }
+
+    /// Sets the per-bar position offset for grouped (side-by-side) bars.
+    ///
+    /// Each bar's category center is shifted by `offset[i]` units along the
+    /// category axis. This is useful for placing multiple bar series next to
+    /// each other within the same categories.
+    ///
+    /// For most grouped-bar use cases, prefer [`Axes::bar_group`] which
+    /// computes offsets automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` - A vector of position offsets, one per bar.
+    pub fn offset(&mut self, offset: Vec<f64>) -> &mut Self {
+        self.offset = Some(offset);
+        self
+    }
 }

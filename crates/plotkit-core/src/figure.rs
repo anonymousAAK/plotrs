@@ -5,9 +5,10 @@
 //! subplot grid layout, drawing the optional super-title, and delegating
 //! per-axes rendering.
 
-use crate::axes::Axes;
+use crate::axes::{Axes, TwinSide};
 use crate::error::Result;
 use crate::layout;
+use crate::legend;
 use crate::primitives::{Affine, HAlign, Paint, Path, Point, Rect, TextStyle, VAlign};
 use crate::renderer::Renderer;
 use crate::theme::Theme;
@@ -75,6 +76,13 @@ pub struct Figure {
     theme: Theme,
     /// Subplot grid dimensions `(nrows, ncols)`, set by `add_subplot`.
     subplot_grid: Option<(usize, usize)>,
+    /// Maps each primary axes index to its twin axes index (if any).
+    ///
+    /// `twin_map[i] = Some(j)` means axes `j` is a twin of axes `i`.
+    /// Twin axes are stored in the same `axes` vec but are rendered
+    /// overlaid on their parent's plot area rather than in their own
+    /// grid cell.
+    twin_map: Vec<Option<usize>>,
 }
 
 impl Figure {
@@ -87,6 +95,7 @@ impl Figure {
             suptitle: None,
             theme: Theme::default(),
             subplot_grid: None,
+            twin_map: Vec::new(),
         }
     }
 
@@ -99,6 +108,7 @@ impl Figure {
             suptitle: None,
             theme: Theme::default(),
             subplot_grid: None,
+            twin_map: Vec::new(),
         }
     }
 
@@ -246,6 +256,62 @@ impl Figure {
     }
 
     // -----------------------------------------------------------------------
+    // Twin axes
+    // -----------------------------------------------------------------------
+
+    /// Creates a twin axes that shares the x-axis of the axes at `parent_index`
+    /// but has an independent y-axis drawn on the right side.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `parent_index` is out of bounds or if the parent already
+    /// has a twin.
+    pub fn twinx(&mut self, parent_index: usize) -> &mut Axes {
+        self.add_twin(parent_index, TwinSide::Right)
+    }
+
+    /// Creates a twin axes that shares the y-axis of the axes at `parent_index`
+    /// but has an independent x-axis drawn on the top side.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `parent_index` is out of bounds or if the parent already
+    /// has a twin.
+    pub fn twiny(&mut self, parent_index: usize) -> &mut Axes {
+        self.add_twin(parent_index, TwinSide::Top)
+    }
+
+    /// Internal helper that creates a twin axes of the given side.
+    fn add_twin(&mut self, parent_index: usize, side: TwinSide) -> &mut Axes {
+        assert!(
+            parent_index < self.axes.len(),
+            "twinx/twiny: parent_index {parent_index} is out of bounds (have {} axes)",
+            self.axes.len()
+        );
+
+        while self.twin_map.len() <= parent_index {
+            self.twin_map.push(None);
+        }
+        assert!(
+            self.twin_map[parent_index].is_none(),
+            "axes at index {parent_index} already has a twin"
+        );
+
+        let parent_color_index = self.axes[parent_index].color_index;
+        let twin = Axes::new_twin(side, parent_color_index);
+        let twin_index = self.axes.len();
+        self.axes.push(twin);
+        self.twin_map[parent_index] = Some(twin_index);
+
+        &mut self.axes[twin_index]
+    }
+
+    /// Returns the twin axes index for a given parent axes index, if one exists.
+    pub fn twin_of(&self, parent_index: usize) -> Option<usize> {
+        self.twin_map.get(parent_index).copied().flatten()
+    }
+
+    // -----------------------------------------------------------------------
     // Rendering
     // -----------------------------------------------------------------------
 
@@ -311,9 +377,48 @@ impl Figure {
         .collect::<Vec<_>>();
 
         // ----- 4. Render each axes -----------------------------------------
+        // Build a set of twin indices so we skip them in the primary loop.
+        let twin_indices: std::collections::HashSet<usize> = self
+            .twin_map
+            .iter()
+            .filter_map(|opt| *opt)
+            .collect();
+
         for (i, axes) in self.axes.iter().enumerate() {
+            // Skip twin axes -- they are rendered after their parent.
+            if twin_indices.contains(&i) {
+                continue;
+            }
+
             if let Some(rect) = rects.get(i) {
-                axes.render(renderer, *rect, theme);
+                let has_twin = self.twin_map.get(i).copied().flatten();
+
+                if let Some(twin_idx) = has_twin {
+                    // Render the primary axes with legend suppressed so the
+                    // Figure can draw a combined legend from both axes.
+                    axes.render_primary(renderer, *rect, theme, true);
+
+                    if let Some(twin_axes) = self.axes.get(twin_idx) {
+                        let plot_area = axes.compute_plot_area(rect);
+                        twin_axes.render_twin(renderer, plot_area, *rect, theme);
+
+                        // Draw a combined legend that includes entries from
+                        // both the primary and twin axes.
+                        if axes.show_legend || twin_axes.show_legend {
+                            let mut entries = axes.collect_legend_entries();
+                            entries.extend(twin_axes.collect_legend_entries());
+                            let loc = if axes.show_legend {
+                                axes.legend_loc
+                            } else {
+                                twin_axes.legend_loc
+                            };
+                            legend::draw_legend(renderer, &entries, &plot_area, loc, theme);
+                        }
+                    }
+                } else {
+                    // No twin -- render normally.
+                    axes.render(renderer, *rect, theme);
+                }
             }
         }
     }
@@ -490,5 +595,108 @@ mod tests {
         fig.add_subplot(2, 3, 6);
         assert_eq!(fig.num_axes(), 6); // padded to fill up to index 6
         assert_eq!(fig.subplot_grid, Some((2, 3)));
+    }
+
+    // -----------------------------------------------------------------------
+    // Twin axes tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn twinx_creates_new_axes() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        let ax2 = fig.twinx(0);
+        assert!(ax2.is_twin());
+        assert_eq!(ax2.twin_side(), Some(TwinSide::Right));
+        assert_eq!(fig.num_axes(), 2);
+    }
+
+    #[test]
+    fn twiny_creates_new_axes() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        let ax2 = fig.twiny(0);
+        assert!(ax2.is_twin());
+        assert_eq!(ax2.twin_side(), Some(TwinSide::Top));
+        assert_eq!(fig.num_axes(), 2);
+    }
+
+    #[test]
+    fn twinx_links_to_parent() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        fig.twinx(0);
+        assert_eq!(fig.twin_of(0), Some(1));
+    }
+
+    #[test]
+    fn twin_has_independent_ylimits() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        fig.axes_mut(0).unwrap().set_ylim(0.0, 100.0);
+        fig.twinx(0);
+        fig.axes_mut(1).unwrap().set_ylim(900.0, 1100.0);
+        assert_eq!(fig.axes(0).unwrap().ylim, Some((0.0, 100.0)));
+        assert_eq!(fig.axes(1).unwrap().ylim, Some((900.0, 1100.0)));
+    }
+
+    #[test]
+    fn twinx_inherits_color_cycle() {
+        let mut fig = Figure::new();
+        let ax = fig.add_subplot(1, 1, 1);
+        ax.plot(vec![1.0, 2.0], vec![3.0, 4.0]).unwrap();
+        let ax2 = fig.twinx(0);
+        ax2.plot(vec![1.0, 2.0], vec![5.0, 6.0]).unwrap();
+        let twin = fig.axes(1).unwrap();
+        match &twin.artists[0] {
+            crate::artist::Artist::Line(a) => {
+                assert_eq!(a.color, Color::TABLEAU_10[1]);
+            }
+            _ => panic!("expected Line artist"),
+        }
+    }
+
+    #[test]
+    fn primary_axes_is_not_twin() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        assert!(!fig.axes(0).unwrap().is_twin());
+        assert_eq!(fig.axes(0).unwrap().twin_side(), None);
+    }
+
+    #[test]
+    fn twin_of_returns_none_when_no_twin() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        assert_eq!(fig.twin_of(0), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "parent_index 5 is out of bounds")]
+    fn twinx_panics_on_out_of_bounds() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        fig.twinx(5);
+    }
+
+    #[test]
+    #[should_panic(expected = "already has a twin")]
+    fn twinx_panics_on_duplicate_twin() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 1, 1);
+        fig.twinx(0);
+        fig.twinx(0);
+    }
+
+    #[test]
+    fn multiple_subplots_with_different_twins() {
+        let mut fig = Figure::new();
+        fig.add_subplot(1, 2, 1);
+        fig.add_subplot(1, 2, 2);
+        fig.twinx(0);
+        fig.twiny(1);
+        assert_eq!(fig.twin_of(0), Some(2));
+        assert_eq!(fig.twin_of(1), Some(3));
+        assert_eq!(fig.num_axes(), 4);
     }
 }

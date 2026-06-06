@@ -1,8 +1,8 @@
 //! Chart builder methods for configuring visual properties.
 //!
 //! Each chart type (line, scatter, bar, histogram, fill_between, step, stem,
-//! boxplot, errorbar, heatmap, pie) has builder methods implemented directly
-//! on its artist type.
+//! boxplot, errorbar, heatmap, pie, violin, contour) has builder methods implemented
+//! directly on its artist type.
 
 pub mod line;
 pub mod scatter;
@@ -15,3 +15,5 @@ pub mod boxplot;
 pub mod errorbar;
 pub mod heatmap;
 pub mod pie;
+pub mod violin;
+pub mod contour;

@@ -7,6 +7,7 @@
 
 use crate::annotations::{Annotation, ArrowStyle, TextAnnotation};
 use crate::artist::*;
+use crate::colorbar::{self, Colorbar};
 use crate::error::{PlotError, Result};
 use crate::layout::{self, LayoutConfig};
 use crate::legend::{self, LegendEntry, SwatchKind};

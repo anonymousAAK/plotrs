@@ -17,6 +17,7 @@
 //! | [`Histogram`]    | Binned frequency distribution of a single series.|
 //! | [`FillBetween`]  | Shaded region between two y-series.              |
 //! | [`Pie`]          | A pie chart showing proportional wedge slices.   |
+//! | [`Violin`]       | A violin plot showing kernel density estimates.  |
 //!
 //! [`Line`]: Artist::Line
 //! [`Scatter`]: Artist::Scatter
@@ -24,6 +25,7 @@
 //! [`Histogram`]: Artist::Histogram
 //! [`FillBetween`]: Artist::FillBetween
 //! [`Pie`]: Artist::Pie
+//! [`Violin`]: Artist::Violin
 
 use crate::charts::boxplot::BoxStats;
 use crate::colormap::Colormap;
@@ -66,6 +68,10 @@ pub enum Artist {
     Heatmap(HeatmapArtist),
     /// A pie chart showing proportional wedge slices.
     Pie(PieArtist),
+    /// A violin plot showing kernel density estimates of distributions.
+    Violin(ViolinArtist),
+    /// A contour or filled contour plot over a 2D grid.
+    Contour(ContourArtist),
 }
 
 
@@ -88,6 +94,8 @@ impl Artist {
             Artist::ErrorBar(a) => a.label.as_deref(),
             Artist::Heatmap(a) => a.label.as_deref(),
             Artist::Pie(a) => a.label.as_deref(),
+            Artist::Violin(a) => a.label.as_deref(),
+            Artist::Contour(a) => a.label.as_deref(),
         }
     }
 
@@ -109,6 +117,8 @@ impl Artist {
             Artist::ErrorBar(a) => a.color,
             Artist::Heatmap(a) => a.color,
             Artist::Pie(a) => a.color,
+            Artist::Violin(a) => a.color,
+            Artist::Contour(a) => a.color,
         }
     }
 
@@ -132,6 +142,8 @@ impl Artist {
             Artist::ErrorBar(a) => a.data_bounds(),
             Artist::Heatmap(a) => a.data_bounds(),
             Artist::Pie(a) => a.data_bounds(),
+            Artist::Violin(a) => a.data_bounds(),
+            Artist::Contour(a) => a.data_bounds(),
         }
     }
 }
@@ -250,6 +262,10 @@ impl ScatterArtist {
 /// category axis, with each bar centered on its position. The `bar_width`
 /// field controls the fraction of the inter-category spacing that the bar
 /// occupies (1.0 = bars touching, 0.5 = half-width with gaps).
+///
+/// For stacked bars, set `bottom` to offset each bar from a baseline other
+/// than zero. For grouped (side-by-side) bars, adjust category positions and
+/// `bar_width` for each series.
 #[derive(Debug, Clone)]
 pub struct BarArtist {
     /// Category labels for the bar axis.
@@ -266,6 +282,16 @@ pub struct BarArtist {
     pub horizontal: bool,
     /// Bar width as a fraction of the category spacing (0.0, 1.0].
     pub bar_width: f64,
+    /// Optional per-bar base offset for stacking.
+    ///
+    /// When `Some`, each bar starts at `bottom[i]` instead of `0.0` and extends
+    /// to `bottom[i] + heights[i]`. The length must equal `heights.len()`.
+    pub bottom: Option<Vec<f64>>,
+    /// Optional per-bar x-position offset for grouped (side-by-side) bars.
+    ///
+    /// When `Some`, each bar's category center is shifted by `offset[i]` data
+    /// units. The length must equal `heights.len()`.
+    pub offset: Option<Vec<f64>>,
 }
 
 impl BarArtist {
@@ -276,18 +302,54 @@ impl BarArtist {
     /// positions. The y-axis spans from `0.0` to the tallest bar, with a
     /// fallback of `(0.0, 1.0)` when the heights series is empty.
     ///
+    /// When `bottom` is set, the value axis includes both the bottom offsets
+    /// and `bottom + height` values. When `offset` is set, the category axis
+    /// is expanded to accommodate shifted bar positions.
+    ///
     /// For horizontal bars the axes are transposed: the y-axis holds the
     /// category positions and the x-axis holds the bar lengths.
     pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
         let n = self.categories.len() as f64;
 
-        // Determine the extent along the value axis (heights / lengths).
-        let height_min = self.heights.min().unwrap_or(0.0).min(0.0);
-        let height_max = self.heights.max().unwrap_or(1.0);
+        // Determine the extent along the value axis (heights / lengths),
+        // accounting for an optional bottom offset.
+        let (height_min, height_max) = if let Some(ref bot) = self.bottom {
+            let mut vmin = f64::INFINITY;
+            let mut vmax = f64::NEG_INFINITY;
+            for i in 0..self.heights.len() {
+                let b = if i < bot.len() { bot[i] } else { 0.0 };
+                let h = self.heights.data[i];
+                let top = b + h;
+                vmin = vmin.min(b).min(top);
+                vmax = vmax.max(b).max(top);
+            }
+            if !vmin.is_finite() {
+                vmin = 0.0;
+            }
+            if !vmax.is_finite() {
+                vmax = 1.0;
+            }
+            // Ensure 0.0 is included when all values are positive or negative.
+            (vmin.min(0.0), vmax)
+        } else {
+            let hmin = self.heights.min().unwrap_or(0.0).min(0.0);
+            let hmax = self.heights.max().unwrap_or(1.0);
+            (hmin, hmax)
+        };
 
         // Category axis runs from -0.5 to n-0.5 so bars are centered on 0..n-1.
-        let cat_min = -0.5;
-        let cat_max = if n > 0.0 { n - 0.5 } else { 0.5 };
+        // Expand if offsets push bars outside this range.
+        let mut cat_min: f64 = -0.5;
+        let mut cat_max: f64 = if n > 0.0 { n - 0.5 } else { 0.5 };
+        if let Some(ref off) = self.offset {
+            let half_bar = self.bar_width * 0.5;
+            for i in 0..self.heights.len() {
+                let o = if i < off.len() { off[i] } else { 0.0 };
+                let center = i as f64 + o;
+                cat_min = cat_min.min(center - half_bar);
+                cat_max = cat_max.max(center + half_bar);
+            }
+        }
 
         if self.horizontal {
             // Horizontal bars: x = value axis, y = category axis.
@@ -609,6 +671,8 @@ pub struct HeatmapArtist {
     pub color: Color,
     /// Optional legend label.
     pub label: Option<String>,
+    /// Whether to auto-attach a colorbar when this heatmap is drawn.
+    pub show_colorbar: bool,
 }
 
 impl HeatmapArtist {
@@ -678,6 +742,100 @@ impl PieArtist {
             .unwrap_or(0.0);
         let extent = self.radius * (1.0 + max_explode) + 0.1 * self.radius;
         (-extent, extent, -extent, extent)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ViolinArtist
+// ---------------------------------------------------------------------------
+
+/// A violin plot showing the probability density of data distributions.
+///
+/// Each dataset produces a mirrored kernel density estimate (KDE) shape,
+/// similar to a boxplot but showing the full distribution. Optional median
+/// and quartile lines can be drawn inside the violin.
+#[derive(Debug, Clone)]
+pub struct ViolinArtist {
+    /// One dataset per violin. Each inner `Vec<f64>` contains the raw values.
+    pub datasets: Vec<Vec<f64>>,
+    /// Optional x-positions for each violin. Defaults to 1, 2, 3, etc.
+    pub positions: Option<Vec<f64>>,
+    /// Maximum width of each violin shape.
+    pub widths: f64,
+    /// Whether to draw a median line inside each violin.
+    pub show_median: bool,
+    /// Whether to draw Q1/Q3 quartile lines inside each violin.
+    pub show_quartiles: bool,
+    /// Fill color of the violin shapes.
+    pub color: Color,
+    /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+    pub alpha: f64,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// KDE bandwidth override. When <= 0.0, Silverman's rule is used.
+    pub bw_method: f64,
+}
+
+// ---------------------------------------------------------------------------
+// ContourArtist
+// ---------------------------------------------------------------------------
+
+/// A contour or filled contour plot over a 2D grid of z = f(x, y) values.
+///
+/// In unfilled mode (`filled = false`), iso-lines are drawn at each contour
+/// level using the marching squares algorithm. In filled mode (`filled = true`),
+/// the regions between contour levels are filled with colors from a colormap.
+#[derive(Debug, Clone)]
+pub struct ContourArtist {
+    /// X grid coordinates (length `nx`).
+    pub x: Vec<f64>,
+    /// Y grid coordinates (length `ny`).
+    pub y: Vec<f64>,
+    /// Z values on the grid, shape `[ny][nx]` (row-major).
+    pub z: Vec<Vec<f64>>,
+    /// Explicit contour levels. When `None`, levels are auto-computed.
+    pub levels: Option<Vec<f64>>,
+    /// Whether to fill regions between levels (`true` for contourf).
+    pub filled: bool,
+    /// Colormap used to map contour levels to colors.
+    pub cmap: Colormap,
+    /// Optional explicit colors for each contour level, overriding the colormap.
+    pub colors: Option<Vec<Color>>,
+    /// Stroke width for contour lines (unfilled mode). Default `1.0`.
+    pub linewidths: f64,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Primary color (used for legend swatch).
+    pub color: Color,
+    /// Number of auto-computed levels when `levels` is `None`. Default `10`.
+    pub num_levels: usize,
+}
+
+impl ContourArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// Returns the extent of the x and y grid coordinates. Falls back to
+    /// `(0.0, 1.0, 0.0, 1.0)` when either coordinate vector is empty.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        if self.x.is_empty() || self.y.is_empty() {
+            return (0.0, 1.0, 0.0, 1.0);
+        }
+        let xmin = self.x.iter().copied().fold(f64::INFINITY, f64::min);
+        let xmax = self.x.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let ymin = self.y.iter().copied().fold(f64::INFINITY, f64::min);
+        let ymax = self.y.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+
+        let (xmin, xmax) = if xmin.is_finite() && xmax.is_finite() {
+            (xmin, xmax)
+        } else {
+            (0.0, 1.0)
+        };
+        let (ymin, ymax) = if ymin.is_finite() && ymax.is_finite() {
+            (ymin, ymax)
+        } else {
+            (0.0, 1.0)
+        };
+        (xmin, xmax, ymin, ymax)
     }
 }
 
@@ -811,6 +969,8 @@ mod tests {
             alpha: 1.0,
             horizontal: false,
             bar_width: 0.8,
+           bottom: None,
+            offset: None,
         }
     }
 
@@ -973,6 +1133,8 @@ mod tests {
             alpha: 1.0,
             horizontal: false,
             bar_width: 0.8,
+           bottom: None,
+            offset: None,
         };
         let (_, _, ymin, ymax) = a.data_bounds();
         assert!((ymin - (-3.0)).abs() < f64::EPSILON);
@@ -989,12 +1151,202 @@ mod tests {
             alpha: 1.0,
             horizontal: false,
             bar_width: 0.8,
+           bottom: None,
+            offset: None,
         };
         let (xmin, xmax, ymin, ymax) = a.data_bounds();
         assert!((xmin - (-0.5)).abs() < f64::EPSILON);
         assert!((xmax - 0.5).abs() < f64::EPSILON);
         assert!((ymin - 0.0).abs() < f64::EPSILON);
         assert!((ymax - 1.0).abs() < f64::EPSILON);
+    }
+
+    // -- BarArtist with bottom (stacking) -----------------------------------
+
+    #[test]
+    fn bar_data_bounds_with_bottom() {
+        let a = BarArtist {
+            categories: Categories::new(vec!["A".into(), "B".into(), "C".into()]),
+            heights: Series::new(vec![3.0, 4.0, 2.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.8,
+            bottom: Some(vec![1.0, 2.0, 3.0]),
+            offset: None,
+        };
+        let (_, _, ymin, ymax) = a.data_bounds();
+        // bottom[0]=1, top[0]=4; bottom[1]=2, top[1]=6; bottom[2]=3, top[2]=5
+        // min includes 0.0 (ensured), max = 6.0
+        assert!((ymin - 0.0).abs() < f64::EPSILON);
+        assert!((ymax - 6.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_data_bounds_with_bottom_negative_base() {
+        let a = BarArtist {
+            categories: Categories::new(vec!["A".into(), "B".into()]),
+            heights: Series::new(vec![5.0, 3.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.8,
+            bottom: Some(vec![-2.0, 1.0]),
+            offset: None,
+        };
+        let (_, _, ymin, ymax) = a.data_bounds();
+        assert!((ymin - (-2.0)).abs() < f64::EPSILON);
+        assert!((ymax - 4.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_data_bounds_with_bottom_horizontal() {
+        let a = BarArtist {
+            categories: Categories::new(vec!["X".into(), "Y".into()]),
+            heights: Series::new(vec![4.0, 6.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: true,
+            bar_width: 0.8,
+            bottom: Some(vec![1.0, 2.0]),
+            offset: None,
+        };
+        let (xmin, xmax, ymin, ymax) = a.data_bounds();
+        // Horizontal: x = value axis, y = category axis.
+        assert!((xmin - 0.0).abs() < f64::EPSILON);
+        assert!((xmax - 8.0).abs() < f64::EPSILON);
+        assert!((ymin - (-0.5)).abs() < f64::EPSILON);
+        assert!((ymax - 1.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_data_bounds_with_offset() {
+        let a = BarArtist {
+            categories: Categories::new(vec!["A".into(), "B".into()]),
+            heights: Series::new(vec![5.0, 3.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.4,
+            bottom: None,
+            offset: Some(vec![-0.2, -0.2]),
+        };
+        let (xmin, _xmax, _, _) = a.data_bounds();
+        // center for bar 0 = 0 + (-0.2) = -0.2, left edge = -0.2 - 0.2 = -0.4
+        assert!(xmin <= -0.4);
+    }
+
+    #[test]
+    fn bar_data_bounds_bottom_and_offset_combined() {
+        let a = BarArtist {
+            categories: Categories::new(vec!["A".into(), "B".into()]),
+            heights: Series::new(vec![3.0, 4.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.4,
+            bottom: Some(vec![2.0, 1.0]),
+            offset: Some(vec![0.2, 0.2]),
+        };
+        let (_, _, ymin, ymax) = a.data_bounds();
+        // bottoms: 2,1; tops: 5,5; min(all,0)=0; max=5
+        assert!((ymin - 0.0).abs() < f64::EPSILON);
+        assert!((ymax - 5.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_data_bounds_single_bar_with_bottom() {
+        let a = BarArtist {
+            categories: Categories::new(vec!["Solo".into()]),
+            heights: Series::new(vec![10.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.8,
+            bottom: Some(vec![5.0]),
+            offset: None,
+        };
+        let (_, _, ymin, ymax) = a.data_bounds();
+        assert!((ymin - 0.0).abs() < f64::EPSILON);
+        assert!((ymax - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_data_bounds_zero_bottom() {
+        // Setting bottom to all zeros should behave identically to no bottom.
+        let a = BarArtist {
+            categories: Categories::new(vec!["A".into(), "B".into()]),
+            heights: Series::new(vec![3.0, 5.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.8,
+            bottom: Some(vec![0.0, 0.0]),
+            offset: None,
+        };
+        let (_, _, ymin, ymax) = a.data_bounds();
+        assert!((ymin - 0.0).abs() < f64::EPSILON);
+        assert!((ymax - 5.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_data_bounds_empty_with_bottom() {
+        let a = BarArtist {
+            categories: Categories::new(vec![]),
+            heights: Series::new(vec![]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.8,
+            bottom: Some(vec![]),
+            offset: None,
+        };
+        let (xmin, xmax, ymin, ymax) = a.data_bounds();
+        assert!((xmin - (-0.5)).abs() < f64::EPSILON);
+        assert!((xmax - 0.5).abs() < f64::EPSILON);
+        assert!((ymin - 0.0).abs() < f64::EPSILON);
+        assert!((ymax - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_data_bounds_stacked_three_layers() {
+        // Simulates top layer of a 3-layer stack: bottom=5, height=1 => top=6.
+        let a = BarArtist {
+            categories: Categories::new(vec!["A".into()]),
+            heights: Series::new(vec![1.0]),
+            color: Color::BLACK,
+            label: None,
+            alpha: 1.0,
+            horizontal: false,
+            bar_width: 0.8,
+            bottom: Some(vec![5.0]),
+            offset: None,
+        };
+        let (_, _, ymin, ymax) = a.data_bounds();
+        assert!((ymin - 0.0).abs() < f64::EPSILON);
+        assert!((ymax - 6.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bar_builder_bottom_sets_field() {
+        let mut a = sample_bar();
+        a.bottom(vec![1.0, 2.0, 3.0]);
+        assert_eq!(a.bottom.as_ref().unwrap(), &vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn bar_builder_offset_sets_field() {
+        let mut a = sample_bar();
+        a.offset(vec![0.1, 0.2, 0.3]);
+        assert_eq!(a.offset.as_ref().unwrap(), &vec![0.1, 0.2, 0.3]);
     }
 
     // -- HistArtist ---------------------------------------------------------

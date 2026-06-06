@@ -32,6 +32,15 @@ impl HeatmapArtist {
         self
     }
 
+    /// Enables or disables auto-attaching a colorbar when this heatmap is drawn.
+    ///
+    /// When `true`, the parent axes will automatically add a colorbar showing
+    /// the color-to-value mapping used by this heatmap.
+    pub fn colorbar(&mut self, show: bool) -> &mut Self {
+        self.show_colorbar = show;
+        self
+    }
+
     /// Sets the legend label.
     pub fn label(&mut self, label: &str) -> &mut Self {
         self.label = Some(label.to_string());
@@ -95,6 +104,7 @@ mod tests {
             x_labels: None, y_labels: None,
             cmap: Colormap::Viridis, vmin: None, vmax: None,
             show_values: false, color: Color::TAB_BLUE, label: None,
+            show_colorbar: false,
         }
     }
 
@@ -180,6 +190,7 @@ mod tests {
             data: vec![], x_labels: None, y_labels: None,
             cmap: Colormap::Viridis, vmin: None, vmax: None,
             show_values: false, color: Color::TAB_BLUE, label: None,
+            show_colorbar: false,
         };
         assert!((h.effective_vmin() - 0.0).abs() < f64::EPSILON);
     }
@@ -190,6 +201,7 @@ mod tests {
             data: vec![], x_labels: None, y_labels: None,
             cmap: Colormap::Viridis, vmin: None, vmax: None,
             show_values: false, color: Color::TAB_BLUE, label: None,
+            show_colorbar: false,
         };
         assert!((h.effective_vmax() - 1.0).abs() < f64::EPSILON);
     }
@@ -210,6 +222,7 @@ mod tests {
             data: vec![], x_labels: None, y_labels: None,
             cmap: Colormap::Viridis, vmin: None, vmax: None,
             show_values: false, color: Color::TAB_BLUE, label: None,
+            show_colorbar: false,
         };
         assert_eq!(h.data_bounds(), (0.0, 1.0, 0.0, 1.0));
     }
@@ -220,6 +233,7 @@ mod tests {
             data: vec![vec![42.0]], x_labels: None, y_labels: None,
             cmap: Colormap::Viridis, vmin: None, vmax: None,
             show_values: false, color: Color::TAB_BLUE, label: None,
+            show_colorbar: false,
         };
         let (xmin, xmax, ymin, ymax) = h.data_bounds();
         assert!((xmin - 0.0).abs() < f64::EPSILON);
@@ -247,6 +261,7 @@ mod tests {
             x_labels: None, y_labels: None,
             cmap: Colormap::Viridis, vmin: None, vmax: None,
             show_values: false, color: Color::TAB_BLUE, label: None,
+            show_colorbar: false,
         };
         assert!((h.effective_vmin() - 1.0).abs() < f64::EPSILON);
         assert!((h.effective_vmax() - 3.0).abs() < f64::EPSILON);

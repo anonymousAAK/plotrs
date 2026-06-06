@@ -24,17 +24,19 @@ pub mod figure;
 pub mod legend;
 pub mod charts;
 pub mod colormap;
+pub mod colorbar;
 
 /// The plotkit-core prelude — import common types with a single `use` statement.
 pub mod prelude {
     pub use crate::error::{PlotError, Result};
     pub use crate::figure::Figure;
-    pub use crate::axes::Axes;
+    pub use crate::axes::{Axes, TwinSide};
     pub use crate::primitives::Color;
     pub use crate::scale::Scale;
     pub use crate::series::{IntoSeries, IntoCategories};
     pub use crate::theme::{Theme, LineStyle, Marker, Loc, GridAxis};
     pub use crate::colormap::Colormap;
+    pub use crate::colorbar::{Colorbar, ColorbarOrientation};
     pub use crate::annotations::{ArrowStyle, TextAnnotation, Annotation};
     pub use crate::primitives::{HAlign, VAlign};
 }
