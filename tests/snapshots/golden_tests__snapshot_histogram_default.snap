@@ -2,4 +2,4 @@
 source: tests/golden_tests.rs
 expression: hash_png(&bytes)
 ---
-png_106288_8982
+png_106927_8982

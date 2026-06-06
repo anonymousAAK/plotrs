@@ -3,7 +3,6 @@
 //! Each test documents whether the edge case panics, returns an error,
 //! or produces valid output.
 
-use plotkit::prelude::*;
 use plotkit::{Figure, FigureExt};
 
 // ============================================================================
@@ -68,7 +67,7 @@ fn edge_empty_data_hist() {
 fn edge_single_point_plot() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[42.0], &[7.0]).expect("single-point plot should succeed");
+    ax.plot([42.0], [7.0]).expect("single-point plot should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty(), "SVG output should not be empty");
     assert!(svg.contains("<svg"), "output should be valid SVG");
@@ -78,7 +77,7 @@ fn edge_single_point_plot() {
 fn edge_single_point_scatter() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.scatter(&[1.0], &[2.0]).expect("single-point scatter should succeed");
+    ax.scatter([1.0], [2.0]).expect("single-point scatter should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -87,7 +86,7 @@ fn edge_single_point_scatter() {
 fn edge_single_point_hist() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.hist(&[5.0], 10).expect("single-point hist should succeed");
+    ax.hist([5.0], 10).expect("single-point hist should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -112,7 +111,7 @@ fn edge_very_large_values() {
 fn edge_very_large_values_scatter() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.scatter(&[1e15, 2e15], &[3e15, 4e15]).expect("large-value scatter should succeed");
+    ax.scatter([1e15, 2e15], [3e15, 4e15]).expect("large-value scatter should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -258,7 +257,7 @@ fn edge_all_nan_hist() {
 fn edge_zero_width_figure() {
     let mut fig = Figure::with_size(0, 600);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0], &[3.0, 4.0]).unwrap();
+    ax.plot([1.0, 2.0], [3.0, 4.0]).unwrap();
     // Should not panic during rendering
     let svg = fig.to_svg_string().expect("zero-width SVG should not fail");
     assert!(svg.contains("<svg"), "should still produce SVG markup");
@@ -268,7 +267,7 @@ fn edge_zero_width_figure() {
 fn edge_zero_height_figure() {
     let mut fig = Figure::with_size(800, 0);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0], &[3.0, 4.0]).unwrap();
+    ax.plot([1.0, 2.0], [3.0, 4.0]).unwrap();
     let svg = fig.to_svg_string().expect("zero-height SVG should not fail");
     assert!(svg.contains("<svg"));
 }
@@ -277,7 +276,7 @@ fn edge_zero_height_figure() {
 fn edge_zero_both_figure() {
     let mut fig = Figure::with_size(0, 0);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0], &[3.0, 4.0]).unwrap();
+    ax.plot([1.0, 2.0], [3.0, 4.0]).unwrap();
     let svg = fig.to_svg_string().expect("zero-size SVG should not fail");
     assert!(svg.contains("<svg"));
 }
@@ -376,7 +375,7 @@ fn edge_mismatched_lengths_bar() {
 fn edge_unicode_title() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0, 3.0], &[1.0, 4.0, 9.0]).unwrap();
+    ax.plot([1.0, 2.0, 3.0], [1.0, 4.0, 9.0]).unwrap();
     ax.set_title("μ ± σ — Gaussian distribution (日本語)");
     ax.set_xlabel("Δx (μm)");
     ax.set_ylabel("Ω (Ω·m⁻¹)");
@@ -391,7 +390,7 @@ fn edge_unicode_suptitle() {
     let mut fig = Figure::new();
     fig.suptitle("Ωmega — α β γ δ ε ζ η θ ι κ λ μ");
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0], &[1.0, 2.0]).unwrap();
+    ax.plot([1.0, 2.0], [1.0, 2.0]).unwrap();
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -400,8 +399,8 @@ fn edge_unicode_suptitle() {
 fn edge_unicode_legend_labels() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0], &[1.0, 2.0]).unwrap().label("α-series");
-    ax.plot(&[1.0, 2.0], &[2.0, 3.0]).unwrap().label("β-series");
+    ax.plot([1.0, 2.0], [1.0, 2.0]).unwrap().label("α-series");
+    ax.plot([1.0, 2.0], [2.0, 3.0]).unwrap().label("β-series");
     ax.legend();
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
@@ -415,7 +414,7 @@ fn edge_unicode_legend_labels() {
 fn edge_empty_string_labels() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0, 3.0], &[1.0, 4.0, 9.0]).unwrap();
+    ax.plot([1.0, 2.0, 3.0], [1.0, 4.0, 9.0]).unwrap();
     ax.set_title("");
     ax.set_xlabel("");
     ax.set_ylabel("");
@@ -428,7 +427,7 @@ fn edge_empty_string_suptitle() {
     let mut fig = Figure::new();
     fig.suptitle("");
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0], &[1.0, 2.0]).unwrap();
+    ax.plot([1.0, 2.0], [1.0, 2.0]).unwrap();
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -458,16 +457,16 @@ fn edge_subplots_mixed_chart_types() {
     let mut fig = Figure::with_size(1200, 900);
     // Subplot 1: line
     let ax1 = fig.add_subplot(2, 2, 1);
-    ax1.plot(&[1.0, 2.0, 3.0], &[1.0, 4.0, 9.0]).unwrap();
+    ax1.plot([1.0, 2.0, 3.0], [1.0, 4.0, 9.0]).unwrap();
     // Subplot 2: scatter
     let ax2 = fig.add_subplot(2, 2, 2);
-    ax2.scatter(&[1.0, 2.0, 3.0], &[9.0, 4.0, 1.0]).unwrap();
+    ax2.scatter([1.0, 2.0, 3.0], [9.0, 4.0, 1.0]).unwrap();
     // Subplot 3: bar
     let ax3 = fig.add_subplot(2, 2, 3);
-    ax3.bar(&["a", "b", "c"][..], &[3.0, 7.0, 5.0]).unwrap();
+    ax3.bar(&["a", "b", "c"][..], [3.0, 7.0, 5.0]).unwrap();
     // Subplot 4: hist
     let ax4 = fig.add_subplot(2, 2, 4);
-    ax4.hist(&[1.0, 2.0, 2.0, 3.0, 3.0, 3.0], 3).unwrap();
+    ax4.hist([1.0, 2.0, 2.0, 3.0, 3.0, 3.0], 3).unwrap();
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -526,7 +525,7 @@ fn edge_hist_all_same_value_single_bin() {
 fn edge_hist_all_same_value_many_bins() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    let data = vec![3.14; 50];
+    let data = vec![3.125; 50];
     ax.hist(&data, 100).expect("all-same-value, 100 bins should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
@@ -558,7 +557,7 @@ fn edge_axes_no_data_render() {
 fn edge_two_points_plot() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+    ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }

@@ -51,8 +51,15 @@ Same result. More ceremony. And you had to leave Rust to get it.
 | **Bar charts** | Supported |
 | **Histograms** | Supported |
 | **fill_between** | Supported |
+| **Step plots** | Supported |
+| **Stem plots** | Supported |
+| **Box plots** | Supported |
+| **Error bars** | Supported |
+| **Heatmaps** | Supported |
+| **Colormap scatter** | Supported (14 colormaps) |
 | **PNG output** | Supported |
 | **SVG output** | Supported |
+| **Jupyter notebooks** | Supported (via Evcxr) |
 | **Beautiful defaults** | Tableau-10 palette, embedded fonts |
 | **Figure/Axes API** | Full control over layout and subplots |
 | **Theme system** | Swap styles without touching your plot code |
@@ -67,7 +74,7 @@ Or add it manually to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-plotkit = "0.1"
+plotkit = "0.2"
 ```
 
 ## Figure & Axes API
@@ -137,7 +144,6 @@ What's coming next:
 - **Polars integration** — plot directly from DataFrames
 - **PDF export** — vector output for print-ready figures
 - **WASM support** — render plots in the browser, no backend required
-- **Jupyter integration** — inline plots in Jupyter notebooks via Evcxr
 
 ## Contributing
 

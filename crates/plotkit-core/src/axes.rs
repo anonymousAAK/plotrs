@@ -1086,7 +1086,7 @@ impl Axes {
 
         // Pre-compute per-point colors from c/cmap if set.
         let cmap_colors: Option<Vec<Color>> = match (&artist.c, &artist.cmap) {
-            (Some(c_vals), Some(cmap)) => Some(cmap.map_values(c_vals)),
+            (Some(c_vals), Some(cmap)) if !c_vals.is_empty() => Some(cmap.map_values(c_vals)),
             _ => None,
         };
 
@@ -1661,11 +1661,6 @@ impl Axes {
             }
         }
     }
-
-    /// Draws the legend box showing labeled artists.
-    ///
-    /// Builds [`LegendEntry`] items from the axes' artists and delegates to
-    /// [`legend::draw_legend`] for measurement, positioning, and rendering.
 
     /// Draws a step (staircase) chart.
     fn draw_step(
@@ -2429,7 +2424,7 @@ mod tests {
     fn stem_data_bounds_include_baseline() {
         let mut ax = Axes::new();
         ax.stem(vec![1.0, 5.0], vec![2.0, 8.0]).unwrap().baseline(-5.0);
-        let (xmin, xmax, ymin, ymax) = ax.compute_data_limits();
+        let (_xmin, _xmax, ymin, _ymax) = ax.compute_data_limits();
         assert!(ymin < -5.0);
     }
 

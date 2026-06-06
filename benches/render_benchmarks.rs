@@ -52,7 +52,7 @@ fn bench_bar_100(c: &mut Criterion) {
         b.iter(|| {
             let mut fig = Figure::new();
             let ax = fig.add_subplot(1, 1, 1);
-            ax.bar(&cats, &heights).unwrap();
+            ax.bar(cats.as_slice(), &heights).unwrap();
             fig.to_png_bytes().unwrap()
         });
     });
@@ -114,7 +114,7 @@ fn bench_tick_generation(c: &mut Criterion) {
                 (0.0, 0.1),
             ];
             for (lo, hi) in &ranges {
-                generate_ticks(*lo, *hi, 7);
+                generate_ticks(*lo, *hi, 7, &plotkit::scale::Scale::Linear);
             }
         });
     });

@@ -39,7 +39,7 @@ fn svg_output_is_valid_svg_wrapper() {
 fn svg_contains_xmlns_and_viewbox() {
     let mut fig = Figure::with_size(640, 480);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0, 2.0], &[0.0, 1.0, 0.5]).unwrap();
+    ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 0.5]).unwrap();
 
     let svg = fig.to_svg_string().unwrap();
 
@@ -89,7 +89,7 @@ fn svg_contains_path_elements_for_plot_data() {
 fn svg_contains_text_elements_for_labels() {
     let mut fig = Figure::with_size(800, 600);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[1.0, 2.0, 3.0], &[1.0, 4.0, 9.0]).unwrap();
+    ax.plot([1.0, 2.0, 3.0], [1.0, 4.0, 9.0]).unwrap();
     ax.set_title("Test Title");
     ax.set_xlabel("X Axis");
     ax.set_ylabel("Y Axis");
@@ -178,7 +178,7 @@ fn svg_suptitle_appears_in_output() {
     let mut fig = Figure::with_size(800, 600);
     fig.suptitle("Overall Title");
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+    ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
 
     let svg = fig.to_svg_string().unwrap();
 
@@ -193,7 +193,7 @@ fn svg_dark_theme_uses_dark_background() {
     let mut fig = Figure::with_size(800, 600);
     fig.set_theme(Theme::dark());
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+    ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
 
     let svg = fig.to_svg_string().unwrap();
 
@@ -245,7 +245,7 @@ fn svg_renderer_clip_path_elements() {
     // Clipping is used during axes rendering, so any plot should produce clip paths
     let mut fig = Figure::with_size(400, 300);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0, 2.0], &[0.0, 1.0, 0.5]).unwrap();
+    ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 0.5]).unwrap();
 
     let svg = fig.to_svg_string().unwrap();
 
@@ -264,7 +264,7 @@ fn svg_renderer_clip_path_elements() {
 fn svg_stroke_attributes_present() {
     let mut fig = Figure::with_size(400, 300);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0, 2.0, 3.0], &[0.0, 1.0, 0.5, 2.0]).unwrap();
+    ax.plot([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 0.5, 2.0]).unwrap();
 
     let svg = fig.to_svg_string().unwrap();
 
@@ -292,7 +292,7 @@ fn svg_text_html_escaping() {
     // Test that special characters in titles/labels are properly escaped
     let mut fig = Figure::with_size(800, 600);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+    ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
     ax.set_title("x < y & z > w");
     ax.set_xlabel("\"quotes\" & 'apostrophes'");
 
@@ -334,11 +334,10 @@ fn svg_text_html_escaping() {
 fn svg_font_family_in_text_style() {
     // When a theme specifies a font family, it should appear in text elements
     let mut fig = Figure::with_size(800, 600);
-    let mut theme = Theme::default();
-    theme.font_family = Some("Arial".to_string());
+    let theme = Theme { font_family: Some("Arial".to_string()), ..Theme::default() };
     fig.set_theme(theme);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+    ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
     ax.set_title("Font Test");
 
     let svg = fig.to_svg_string().unwrap();
@@ -394,11 +393,11 @@ fn svg_multiple_subplots() {
     let mut fig = Figure::with_size(800, 600);
 
     let ax1 = fig.add_subplot(1, 2, 1);
-    ax1.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+    ax1.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
     ax1.set_title("Left");
 
     let ax2 = fig.add_subplot(1, 2, 2);
-    ax2.plot(&[0.0, 1.0], &[1.0, 0.0]).unwrap();
+    ax2.plot([0.0, 1.0], [1.0, 0.0]).unwrap();
     ax2.set_title("Right");
 
     let svg = fig.to_svg_string().unwrap();
