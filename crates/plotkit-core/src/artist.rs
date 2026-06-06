@@ -18,6 +18,9 @@
 //! | [`FillBetween`]  | Shaded region between two y-series.              |
 //! | [`Pie`]          | A pie chart showing proportional wedge slices.   |
 //! | [`Violin`]       | A violin plot showing kernel density estimates.  |
+//! | [`Polar`]        | A polar line or filled radar chart.               |
+//! | [`Hexbin`]       | Hexagonal binning plot showing point density.    |
+//! | [`Waterfall`]    | Cumulative positive/negative change bars.        |
 //!
 //! [`Line`]: Artist::Line
 //! [`Scatter`]: Artist::Scatter
@@ -26,9 +29,13 @@
 //! [`FillBetween`]: Artist::FillBetween
 //! [`Pie`]: Artist::Pie
 //! [`Violin`]: Artist::Violin
+//! [`Polar`]: Artist::Polar
+//! [`Hexbin`]: Artist::Hexbin
+//! [`Waterfall`]: Artist::Waterfall
 
 use crate::charts::boxplot::BoxStats;
 use crate::colormap::Colormap;
+use crate::decimate::DecimateMethod;
 use crate::primitives::Color;
 use crate::series::{Categories, Series};
 use crate::theme::{LineStyle, Marker};
@@ -72,6 +79,12 @@ pub enum Artist {
     Violin(ViolinArtist),
     /// A contour or filled contour plot over a 2D grid.
     Contour(ContourArtist),
+    /// A polar line or filled radar chart in polar coordinates.
+    Polar(PolarArtist),
+    /// A hexagonal binning plot showing point density as colored hexagons.
+    Hexbin(HexbinArtist),
+    /// A waterfall chart showing cumulative positive and negative changes.
+    Waterfall(WaterfallArtist),
 }
 
 
@@ -96,6 +109,9 @@ impl Artist {
             Artist::Pie(a) => a.label.as_deref(),
             Artist::Violin(a) => a.label.as_deref(),
             Artist::Contour(a) => a.label.as_deref(),
+            Artist::Polar(a) => a.label.as_deref(),
+            Artist::Hexbin(a) => a.label.as_deref(),
+            Artist::Waterfall(a) => a.label.as_deref(),
         }
     }
 
@@ -119,6 +135,9 @@ impl Artist {
             Artist::Pie(a) => a.color,
             Artist::Violin(a) => a.color,
             Artist::Contour(a) => a.color,
+            Artist::Polar(a) => a.color,
+            Artist::Hexbin(a) => a.color,
+            Artist::Waterfall(a) => a.color,
         }
     }
 
@@ -144,6 +163,9 @@ impl Artist {
             Artist::Pie(a) => a.data_bounds(),
             Artist::Violin(a) => a.data_bounds(),
             Artist::Contour(a) => a.data_bounds(),
+            Artist::Polar(a) => a.data_bounds(),
+            Artist::Hexbin(a) => a.data_bounds(),
+            Artist::Waterfall(a) => a.data_bounds(),
         }
     }
 }
@@ -187,6 +209,10 @@ pub struct LineArtist {
     pub label: Option<String>,
     /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
     pub alpha: f64,
+    /// Optional decimation: `(threshold, method)`. When set and data length
+    /// exceeds `threshold`, the rendering pipeline downsamples the data
+    /// before drawing.
+    pub decimate: Option<(usize, DecimateMethod)>,
 }
 
 impl LineArtist {
@@ -923,6 +949,209 @@ impl StemArtist {
 }
 
 // ---------------------------------------------------------------------------
+// PolarArtist
+// ---------------------------------------------------------------------------
+
+/// A polar line or filled radar chart in polar coordinates.
+///
+/// Each data point is defined by an angle `theta` (in radians) and a radial
+/// distance `r`. In line mode, a polyline connects the data points. In filled
+/// mode, the path is closed and the interior is filled, producing a radar or
+/// area chart.
+///
+/// The rendering pipeline converts polar coordinates to Cartesian pixel
+/// coordinates using `x = cx + r*cos(theta)`, `y = cy - r*sin(theta)`, draws
+/// concentric circles for the r-grid, and radial lines for the theta-grid.
+#[derive(Debug, Clone)]
+pub struct PolarArtist {
+    /// Angles in radians, measured counter-clockwise from the positive x-axis.
+    pub theta: Vec<f64>,
+    /// Radial distances from the origin. Must have the same length as `theta`.
+    pub r: Vec<f64>,
+    /// Stroke/fill color.
+    pub color: Color,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+    pub alpha: f64,
+    /// Stroke width in pixels for the polar line.
+    pub linewidth: f64,
+    /// When `true`, the polar path is closed and filled (radar/area chart).
+    pub filled: bool,
+    /// Optional marker shape drawn at each data point.
+    pub marker: Option<Marker>,
+}
+
+// ---------------------------------------------------------------------------
+// HexbinArtist
+// ---------------------------------------------------------------------------
+
+/// A hexagonal binning (hexbin) plot that visualises point density on a 2D
+/// plane using a grid of flat-top hexagons.
+///
+/// Each hexagon is coloured according to the number of data points that fall
+/// within its boundaries, mapped through the configured [`Colormap`]. This
+/// is especially useful for large datasets where individual scatter points
+/// would overlap heavily.
+#[derive(Debug, Clone)]
+pub struct HexbinArtist {
+    /// X-coordinates of the raw data points.
+    pub x: Vec<f64>,
+    /// Y-coordinates of the raw data points.
+    pub y: Vec<f64>,
+    /// Number of hexagons across the x-axis. Default `20`.
+    pub gridsize: usize,
+    /// Colormap used to map bin counts to colors.
+    pub cmap: Colormap,
+    /// Minimum point count for a hex to be drawn. Default `1`.
+    pub mincnt: usize,
+    /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+    pub alpha: f64,
+    /// Primary color (used for legend swatch).
+    pub color: Color,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Optional edge (stroke) color for hexagons.
+    pub edgecolor: Option<Color>,
+    /// Whether to auto-attach a colorbar when this hexbin is drawn.
+    pub show_colorbar: bool,
+}
+
+impl HexbinArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// Returns the extent of the finite x and y values. Falls back to
+    /// `(0.0, 1.0, 0.0, 1.0)` when data is empty or entirely non-finite.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        if self.x.is_empty() || self.y.is_empty() {
+            return (0.0, 1.0, 0.0, 1.0);
+        }
+
+        let mut xmin = f64::INFINITY;
+        let mut xmax = f64::NEG_INFINITY;
+        let mut ymin = f64::INFINITY;
+        let mut ymax = f64::NEG_INFINITY;
+
+        for &v in &self.x {
+            if v.is_finite() {
+                if v < xmin { xmin = v; }
+                if v > xmax { xmax = v; }
+            }
+        }
+        for &v in &self.y {
+            if v.is_finite() {
+                if v < ymin { ymin = v; }
+                if v > ymax { ymax = v; }
+            }
+        }
+
+        let (xmin, xmax) = if xmin.is_finite() && xmax.is_finite() {
+            (xmin, xmax)
+        } else {
+            (0.0, 1.0)
+        };
+        let (ymin, ymax) = if ymin.is_finite() && ymax.is_finite() {
+            (ymin, ymax)
+        } else {
+            (0.0, 1.0)
+        };
+        (xmin, xmax, ymin, ymax)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WaterfallArtist
+// ---------------------------------------------------------------------------
+
+/// A waterfall chart showing how an initial value is affected by a series of
+/// positive and negative changes.
+///
+/// Each bar represents an incremental change from the previous cumulative
+/// total. Bars that increase the total are colored with `increase_color`,
+/// bars that decrease it use `decrease_color`, and bars explicitly marked
+/// as totals (via `total_indices`) are drawn from zero using `total_color`.
+#[derive(Debug, Clone)]
+pub struct WaterfallArtist {
+    /// Category labels for each bar.
+    pub categories: Categories,
+    /// Change values: positive values increase the running total, negative
+    /// values decrease it. For total bars, the value is the absolute total.
+    pub values: Series,
+    /// Indices of bars that represent totals (drawn from zero).
+    pub total_indices: Vec<usize>,
+    /// Fill color for bars showing positive changes.
+    pub increase_color: Color,
+    /// Fill color for bars showing negative changes.
+    pub decrease_color: Color,
+    /// Fill color for total bars.
+    pub total_color: Color,
+    /// When `true`, thin horizontal connector lines are drawn from each bar's
+    /// top to the next bar's base.
+    pub connector_lines: bool,
+    /// When `true`, value labels are rendered on each bar.
+    pub show_values: bool,
+    /// Bar width as a fraction of the category spacing (0.0, 1.0].
+    pub bar_width: f64,
+    /// Optional legend label.
+    pub label: Option<String>,
+    /// Primary color used for legend swatch rendering.
+    pub color: Color,
+    /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+    pub alpha: f64,
+}
+
+impl WaterfallArtist {
+    /// Computes the data-space bounding box `(xmin, xmax, ymin, ymax)`.
+    ///
+    /// The x-axis spans from `-0.5` to `n - 0.5` so that bars are centered
+    /// on integer positions. The y-axis covers the full range of the running
+    /// cumulative sum (including zero) so that all bars are visible.
+    pub fn data_bounds(&self) -> (f64, f64, f64, f64) {
+        let n = self.categories.len() as f64;
+        if n == 0.0 {
+            return (0.0, 1.0, 0.0, 1.0);
+        }
+
+        let cat_min = -0.5;
+        let cat_max = n - 0.5;
+
+        // Compute running cumulative sum to find y-extent.
+        let mut running = 0.0;
+        let mut y_min = 0.0_f64;
+        let mut y_max = 0.0_f64;
+
+        for i in 0..self.values.len() {
+            let prev = running;
+            if self.total_indices.contains(&i) {
+                running = self.values.data[i];
+            } else {
+                running += self.values.data[i];
+            }
+            // For non-total bars, the bar spans from prev to running.
+            // For total bars, the bar spans from 0 to running.
+            if self.total_indices.contains(&i) {
+                y_min = y_min.min(0.0).min(running);
+                y_max = y_max.max(0.0).max(running);
+            } else {
+                y_min = y_min.min(prev).min(running);
+                y_max = y_max.max(prev).max(running);
+            }
+        }
+
+        // Ensure we always include zero.
+        y_min = y_min.min(0.0);
+        y_max = y_max.max(0.0);
+
+        // Ensure non-zero extent.
+        if (y_max - y_min).abs() < f64::EPSILON {
+            y_max = y_min + 1.0;
+        }
+
+        (cat_min, cat_max, y_min, y_max)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -940,6 +1169,7 @@ mod tests {
             style: LineStyle::Solid,
             label: Some("line".to_string()),
             alpha: 1.0,
+            decimate: None,
         }
     }
 
@@ -1056,6 +1286,7 @@ mod tests {
             style: LineStyle::Solid,
             label: None,
             alpha: 1.0,
+            decimate: None,
         };
         assert_eq!(a.data_bounds(), (0.0, 1.0, 0.0, 1.0));
     }
@@ -1070,6 +1301,7 @@ mod tests {
             style: LineStyle::Solid,
             label: None,
             alpha: 1.0,
+            decimate: None,
         };
         assert_eq!(a.data_bounds(), (2.0, 5.0, 1.0, 3.0));
     }

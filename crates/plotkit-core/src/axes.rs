@@ -221,6 +221,7 @@ impl Axes {
             style: crate::theme::LineStyle::Solid,
             label: None,
             alpha: 1.0,
+            decimate: None,
         };
         self.artists.push(Artist::Line(artist));
         match self.artists.last_mut().expect("just pushed") {
@@ -1068,6 +1069,178 @@ impl Axes {
         }
         Ok(())
     }
+
+    /// Creates a hexagonal binning plot from `(x, y)` data points.
+    ///
+    /// Returns a mutable reference to the [`HexbinArtist`] for chaining
+    /// builder methods (`.gridsize()`, `.colormap()`, `.mincnt()`, etc.).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::EmptyData`] if `x` or `y` is empty.
+    /// Returns [`PlotError::SeriesLengthMismatch`] if `x` and `y` differ in length.
+    pub fn hexbin<X, Y>(&mut self, x: X, y: Y) -> Result<&mut HexbinArtist>
+    where
+        X: IntoSeries,
+        Y: IntoSeries,
+    {
+        let xs = x.into_series();
+        let ys = y.into_series();
+        if xs.is_empty() || ys.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        if xs.len() != ys.len() {
+            return Err(PlotError::SeriesLengthMismatch {
+                expected: xs.len(),
+                got: ys.len(),
+            });
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = HexbinArtist {
+            x: xs.data,
+            y: ys.data,
+            gridsize: 20,
+            cmap: crate::colormap::Colormap::Viridis,
+            mincnt: 1,
+            alpha: 1.0,
+            color,
+            label: None,
+            edgecolor: None,
+            show_colorbar: false,
+        };
+        self.artists.push(Artist::Hexbin(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Hexbin(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a polar line plot from `(theta, r)` data in polar coordinates.
+    ///
+    /// `theta` contains angles in radians, `r` contains the corresponding
+    /// radial distances. The data is drawn as a connected polyline in polar
+    /// space.
+    ///
+    /// Returns a mutable reference to the [`PolarArtist`] for chaining.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::SeriesLengthMismatch`] if `theta` and `r` have
+    /// different lengths, or [`PlotError::EmptyData`] if either is empty.
+    pub fn polar_plot<T, R>(&mut self, theta: T, r: R) -> Result<&mut PolarArtist>
+    where
+        T: IntoSeries,
+        R: IntoSeries,
+    {
+        let ts = theta.into_series();
+        let rs = r.into_series();
+        if ts.len() != rs.len() {
+            return Err(PlotError::SeriesLengthMismatch {
+                expected: ts.len(),
+                got: rs.len(),
+            });
+        }
+        if ts.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = PolarArtist {
+            theta: ts.data,
+            r: rs.data,
+            color,
+            label: None,
+            alpha: 1.0,
+            linewidth: 1.5,
+            filled: false,
+            marker: None,
+        };
+        self.artists.push(Artist::Polar(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Polar(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a filled polar (radar/area) chart from `(theta, r)` data.
+    ///
+    /// Like [`polar_plot`](Axes::polar_plot), but the path is automatically
+    /// closed and filled, producing a radar or area chart.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::SeriesLengthMismatch`] if `theta` and `r` have
+    /// different lengths, or [`PlotError::EmptyData`] if either is empty.
+    pub fn polar_fill<T, R>(&mut self, theta: T, r: R) -> Result<&mut PolarArtist>
+    where
+        T: IntoSeries,
+        R: IntoSeries,
+    {
+        let artist_ref = self.polar_plot(theta, r)?;
+        artist_ref.filled(true);
+        artist_ref.alpha(0.3);
+        Ok(artist_ref)
+    }
+
+    /// Creates a waterfall chart from categorical data and change values.
+    ///
+    /// Each bar represents an incremental change (positive or negative) from
+    /// the previous running total. Positive changes are colored green,
+    /// negative changes red, and bars marked as totals are colored blue-gray.
+    ///
+    /// The method also sets the x-axis tick positions and labels to match the
+    /// category labels so they render on the axis automatically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlotError::SeriesLengthMismatch`] if `categories` and
+    /// `values` have different lengths, or [`PlotError::EmptyData`] if empty.
+    pub fn waterfall<C, V>(&mut self, categories: C, values: V) -> Result<&mut WaterfallArtist>
+    where
+        C: IntoCategories,
+        V: IntoSeries,
+    {
+        let cats = categories.into_categories();
+        let vals = values.into_series();
+        if cats.len() != vals.len() {
+            return Err(PlotError::SeriesLengthMismatch {
+                expected: cats.len(),
+                got: vals.len(),
+            });
+        }
+        if cats.is_empty() {
+            return Err(PlotError::EmptyData);
+        }
+
+        // Set x-axis ticks to category positions with category labels.
+        let n = cats.len();
+        let tick_positions: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        self.custom_xticks = Some(tick_positions);
+        self.custom_xticklabels = Some(cats.labels.iter().map(|s| s.to_string()).collect());
+
+        let color = Color::TABLEAU_10[self.color_index % 10];
+        self.color_index += 1;
+        let artist = WaterfallArtist {
+            categories: cats,
+            values: vals,
+            total_indices: Vec::new(),
+            increase_color: Color::rgb(0x2C, 0xA0, 0x2C), // Professional green
+            decrease_color: Color::rgb(0xD6, 0x27, 0x28), // Professional red
+            total_color: Color::rgb(0x4E, 0x79, 0xA7),    // Tableau blue-gray
+            connector_lines: true,
+            show_values: false,
+            bar_width: 0.6,
+            label: None,
+            color,
+            alpha: 1.0,
+        };
+        self.artists.push(Artist::Waterfall(artist));
+        match self.artists.last_mut().expect("just pushed") {
+            Artist::Waterfall(a) => Ok(a),
+            _ => unreachable!(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1211,14 +1384,23 @@ impl Axes {
 
     fn auto_colorbar_from_artists(&self) -> Option<Colorbar> {
         for artist in &self.artists {
-            if let Artist::Heatmap(a) = artist {
-                if a.show_colorbar {
+            match artist {
+                Artist::Heatmap(a) if a.show_colorbar => {
                     return Some(Colorbar::new(
                         a.cmap,
                         a.effective_vmin(),
                         a.effective_vmax(),
                     ));
                 }
+                Artist::Hexbin(a) if a.show_colorbar => {
+                    let result = crate::charts::hexbin::bin_hexagonal(
+                        &a.x, &a.y, a.gridsize, a.mincnt,
+                    );
+                    let vmin = result.min_count as f64;
+                    let vmax = (result.max_count as f64).max(vmin + 1.0);
+                    return Some(Colorbar::new(a.cmap, vmin, vmax));
+                }
+                _ => {}
             }
         }
         None
@@ -1306,6 +1488,9 @@ impl Axes {
                     Artist::Pie(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Violin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Contour(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
+                    Artist::Polar(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
+                    Artist::Hexbin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Waterfall(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                 };
                 label.map(|l| LegendEntry {
                     label: l.to_string(),
@@ -1459,6 +1644,27 @@ impl Axes {
                     y_hi = y_hi.max(byhi);
                 }
                 Artist::Contour(a) => {
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
+                Artist::Polar(a) => {
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
+                Artist::Hexbin(a) => {
+                    let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
+                    x_lo = x_lo.min(bxlo);
+                    x_hi = x_hi.max(bxhi);
+                    y_lo = y_lo.min(bylo);
+                    y_hi = y_hi.max(byhi);
+                }
+                Artist::Waterfall(a) => {
                     let (bxlo, bxhi, bylo, byhi) = a.data_bounds();
                     x_lo = x_lo.min(bxlo);
                     x_hi = x_hi.max(bxhi);
@@ -1699,10 +1905,16 @@ impl Axes {
             Artist::Pie(a) => self.draw_pie(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
             Artist::Violin(a) => self.draw_violin(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
             Artist::Contour(a) => self.draw_contour(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::Polar(a) => self.draw_polar(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
+            Artist::Hexbin(a) => self.draw_hexbin(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::Waterfall(a) => self.draw_waterfall(renderer, a, plot_area, xmin, xmax, ymin, ymax),
         }
     }
 
     /// Draws a line chart: builds a polyline from data points and strokes it.
+    ///
+    /// When the artist has decimation enabled and the data exceeds the
+    /// threshold, the point set is downsampled before path construction.
     fn draw_line(
         &self,
         renderer: &mut impl Renderer,
@@ -1717,16 +1929,36 @@ impl Axes {
             return;
         }
 
+        // Compute the set of indices to draw (possibly decimated).
+        let indices: Vec<usize> = match artist.decimate {
+            Some((threshold, method)) if artist.x.len() > threshold => {
+                use crate::decimate::{self, DecimateMethod};
+                match method {
+                    DecimateMethod::Lttb => {
+                        decimate::lttb(&artist.x.data, &artist.y.data, threshold)
+                    }
+                    DecimateMethod::MinMax => {
+                        decimate::minmax(&artist.x.data, &artist.y.data, threshold)
+                    }
+                }
+            }
+            _ => (0..artist.x.len()).collect(),
+        };
+
+        if indices.is_empty() {
+            return;
+        }
+
         let mut path = Path::new();
         let first = self.data_to_pixel(
-            artist.x.data[0],
-            artist.y.data[0],
+            artist.x.data[indices[0]],
+            artist.y.data[indices[0]],
             plot_area,
             xmin, xmax, ymin, ymax,
         );
         path.move_to(first.x, first.y);
 
-        for i in 1..artist.x.len() {
+        for &i in &indices[1..] {
             let pt = self.data_to_pixel(
                 artist.x.data[i],
                 artist.y.data[i],
@@ -2914,6 +3146,436 @@ impl Axes {
         }
     }
 
+    /// Draws a polar chart: concentric r-grid circles, radial theta-grid lines,
+    /// and the data path in polar coordinates.
+    fn draw_polar(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &PolarArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+        theme: &Theme,
+    ) {
+        let n = artist.r.len().min(artist.theta.len());
+        if n == 0 {
+            return;
+        }
+
+        let r_max = artist.max_finite_r();
+        if r_max <= 0.0 || !r_max.is_finite() {
+            return;
+        }
+
+        // The center of the plot in pixel space. The polar data is centered
+        // at the origin in data space (0, 0).
+        let center = self.data_to_pixel(0.0, 0.0, plot_area, xmin, xmax, ymin, ymax);
+
+        // Use the smaller dimension to avoid clipping.
+        let max_radius_px = (plot_area.width / 2.0).min(plot_area.height / 2.0) * 0.85;
+
+        // --- Draw r-grid: concentric circles ---
+        let num_r_rings = 5;
+        let r_step = r_max / num_r_rings as f64;
+        let grid_color = theme.grid_color;
+        let grid_paint = Paint::new(grid_color.with_alpha(100));
+        let grid_stroke = Stroke::new(0.5);
+        let label_style = TextStyle {
+            size: 9.0,
+            color: theme.tick_color,
+            weight: FontWeight::Normal,
+            family: theme.font_family.clone(),
+            halign: HAlign::Left,
+            valign: VAlign::Middle,
+        };
+
+        for i in 1..=num_r_rings {
+            let r_val = i as f64 * r_step;
+            let r_px = r_val / r_max * max_radius_px;
+            let circle = Path::circle(center, r_px);
+            renderer.stroke_path(&circle, &grid_paint, &grid_stroke, Affine::IDENTITY);
+
+            // R-axis label at the right side of each circle
+            let label_pt = Point::new(center.x + r_px + 3.0, center.y - 2.0);
+            let label_text = if r_val == r_val.floor() {
+                format!("{:.0}", r_val)
+            } else {
+                format!("{:.1}", r_val)
+            };
+            renderer.draw_text(&label_text, label_pt, &label_style, Affine::IDENTITY);
+        }
+
+        // --- Draw theta-grid: radial lines at 0, 30, 60, ..., 330 degrees ---
+        let angle_label_style = TextStyle {
+            size: 10.0,
+            color: theme.tick_color,
+            weight: FontWeight::Normal,
+            family: theme.font_family.clone(),
+            halign: HAlign::Center,
+            valign: VAlign::Middle,
+        };
+
+        for deg in (0..360).step_by(30) {
+            let angle = (deg as f64).to_radians();
+            let end_x = center.x + max_radius_px * angle.cos();
+            let end_y = center.y - max_radius_px * angle.sin();
+            let mut line = Path::new();
+            line.move_to(center.x, center.y);
+            line.line_to(end_x, end_y);
+            renderer.stroke_path(&line, &grid_paint, &grid_stroke, Affine::IDENTITY);
+
+            // Angle label at the tip of each radial line
+            let label_offset = 14.0;
+            let lx = center.x + (max_radius_px + label_offset) * angle.cos();
+            let ly = center.y - (max_radius_px + label_offset) * angle.sin();
+            let label_text = format!("{}°", deg);
+            renderer.draw_text(&label_text, Point::new(lx, ly), &angle_label_style, Affine::IDENTITY);
+        }
+
+        // --- Draw the data path ---
+        // Helper: convert (r, theta) -> pixel coordinates
+        let to_px = |r: f64, theta: f64| -> Point {
+            let px_r = r / r_max * max_radius_px;
+            Point::new(
+                center.x + px_r * theta.cos(),
+                center.y - px_r * theta.sin(),
+            )
+        };
+
+        let mut path = Path::new();
+        let mut started = false;
+
+        for i in 0..n {
+            let r = artist.r[i];
+            let theta = artist.theta[i];
+            if !r.is_finite() || !theta.is_finite() || r < 0.0 {
+                continue;
+            }
+            let pt = to_px(r, theta);
+            if !started {
+                path.move_to(pt.x, pt.y);
+                started = true;
+            } else {
+                path.line_to(pt.x, pt.y);
+            }
+        }
+
+        if !started {
+            return;
+        }
+
+        let alpha_byte = (artist.alpha * 255.0) as u8;
+        let color = artist.color.with_alpha(alpha_byte);
+
+        if artist.filled {
+            // Close the path and fill
+            path.close();
+            let fill_paint = Paint::new(color);
+            renderer.fill_path(&path, &fill_paint, Affine::IDENTITY);
+            // Draw the outline
+            let stroke_paint = Paint::new(artist.color.with_alpha(((artist.alpha.min(1.0) * 0.8 + 0.2) * 255.0) as u8));
+            let stroke = Stroke::new(artist.linewidth);
+            renderer.stroke_path(&path, &stroke_paint, &stroke, Affine::IDENTITY);
+        } else {
+            // Stroke the path
+            let paint = Paint::new(color);
+            let stroke = Stroke::new(artist.linewidth);
+            renderer.stroke_path(&path, &paint, &stroke, Affine::IDENTITY);
+        }
+
+        // --- Draw markers at each data point ---
+        if let Some(marker) = artist.marker {
+            let marker_size = 5.0;
+            let marker_radius = marker_size / 2.0;
+            let marker_paint = Paint::new(color);
+
+            for i in 0..n {
+                let r = artist.r[i];
+                let theta = artist.theta[i];
+                if !r.is_finite() || !theta.is_finite() || r < 0.0 {
+                    continue;
+                }
+                let pt = to_px(r, theta);
+                let marker_path = match marker {
+                    Marker::Circle | Marker::Point => Path::circle(pt, marker_radius),
+                    Marker::Square => Path::rect(Rect::new(
+                        pt.x - marker_radius,
+                        pt.y - marker_radius,
+                        marker_size,
+                        marker_size,
+                    )),
+                    Marker::Diamond => {
+                        let mut p = Path::new();
+                        p.move_to(pt.x, pt.y - marker_radius);
+                        p.line_to(pt.x + marker_radius, pt.y);
+                        p.line_to(pt.x, pt.y + marker_radius);
+                        p.line_to(pt.x - marker_radius, pt.y);
+                        p.close();
+                        p
+                    }
+                    Marker::Triangle => {
+                        let mut p = Path::new();
+                        let h = marker_radius * 1.1547;
+                        p.move_to(pt.x, pt.y - marker_radius);
+                        p.line_to(pt.x + h * 0.5, pt.y + marker_radius * 0.5);
+                        p.line_to(pt.x - h * 0.5, pt.y + marker_radius * 0.5);
+                        p.close();
+                        p
+                    }
+                    Marker::Plus => {
+                        let mut p = Path::new();
+                        p.move_to(pt.x - marker_radius, pt.y);
+                        p.line_to(pt.x + marker_radius, pt.y);
+                        p.move_to(pt.x, pt.y - marker_radius);
+                        p.line_to(pt.x, pt.y + marker_radius);
+                        let ms = Stroke::new(theme.line_width.max(1.0));
+                        renderer.stroke_path(&p, &marker_paint, &ms, Affine::IDENTITY);
+                        continue;
+                    }
+                    Marker::Cross => {
+                        let mut p = Path::new();
+                        let d = marker_radius * 0.707;
+                        p.move_to(pt.x - d, pt.y - d);
+                        p.line_to(pt.x + d, pt.y + d);
+                        p.move_to(pt.x + d, pt.y - d);
+                        p.line_to(pt.x - d, pt.y + d);
+                        let ms = Stroke::new(theme.line_width.max(1.0));
+                        renderer.stroke_path(&p, &marker_paint, &ms, Affine::IDENTITY);
+                        continue;
+                    }
+                    Marker::Star => {
+                        let mut p = Path::new();
+                        let inner = marker_radius * 0.382;
+                        for j in 0..10 {
+                            let a = std::f64::consts::FRAC_PI_2 + j as f64 * std::f64::consts::PI / 5.0;
+                            let r = if j % 2 == 0 { marker_radius } else { inner };
+                            let sx = pt.x + r * a.cos();
+                            let sy = pt.y - r * a.sin();
+                            if j == 0 { p.move_to(sx, sy); } else { p.line_to(sx, sy); }
+                        }
+                        p.close();
+                        p
+                    }
+                };
+                renderer.fill_path(&marker_path, &marker_paint, Affine::IDENTITY);
+            }
+        }
+    }
+
+    /// Draws a hexbin plot: bins data points into hexagonal cells, maps
+    /// counts through the colormap, and renders filled hexagons.
+    fn draw_hexbin(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &HexbinArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        use crate::charts::hexbin::{bin_hexagonal, hexagon_vertices, hex_size_for_gridsize};
+
+        let result = bin_hexagonal(&artist.x, &artist.y, artist.gridsize, artist.mincnt);
+        if result.cells.is_empty() {
+            return;
+        }
+
+        let vmin = result.min_count as f64;
+        let vmax = result.max_count as f64;
+
+        // Compute hex size in data space.
+        let data_xrange = (xmax - xmin).max(f64::EPSILON);
+        let hex_data_size = hex_size_for_gridsize(data_xrange, artist.gridsize);
+
+        let alpha_byte = (artist.alpha * 255.0).round() as u8;
+
+        for &(cx, cy, count) in &result.cells {
+            // Map count to color via colormap.
+            let mut fill_color = artist.cmap.map_value(count as f64, vmin, vmax);
+            fill_color = fill_color.with_alpha(alpha_byte);
+
+            // Compute hex vertices in data space, then convert to pixel space.
+            let data_verts = hexagon_vertices(cx, cy, hex_data_size);
+
+            let mut path = Path::new();
+            for (i, &(vx, vy)) in data_verts.iter().enumerate() {
+                let p = self.data_to_pixel(vx, vy, plot_area, xmin, xmax, ymin, ymax);
+                if i == 0 {
+                    path.move_to(p.x, p.y);
+                } else {
+                    path.line_to(p.x, p.y);
+                }
+            }
+            path.close();
+
+            renderer.fill_path(&path, &Paint::new(fill_color), Affine::IDENTITY);
+
+            // Optional edge stroke.
+            if let Some(edge_color) = artist.edgecolor {
+                let stroke = Stroke::new(0.5);
+                renderer.stroke_path(
+                    &path,
+                    &Paint::new(edge_color.with_alpha(alpha_byte)),
+                    &stroke,
+                    Affine::IDENTITY,
+                );
+            }
+        }
+    }
+
+    /// Draws a waterfall chart: bars showing cumulative positive/negative changes.
+    fn draw_waterfall(
+        &self,
+        renderer: &mut impl Renderer,
+        artist: &WaterfallArtist,
+        plot_area: &Rect,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+    ) {
+        let n = artist.categories.len();
+        if n == 0 {
+            return;
+        }
+
+        let positions = artist.bar_positions();
+        let cumsum = artist.cumulative_sums();
+
+        let cat_range = xmax - xmin;
+        let cat_step = cat_range / n as f64;
+        let bar_half = cat_step * artist.bar_width * 0.5;
+
+        for i in 0..n {
+            let (base, top) = positions[i];
+
+            // Select bar color based on type.
+            let bar_color = if artist.total_indices.contains(&i) {
+                artist.total_color
+            } else if artist.values.data[i] >= 0.0 {
+                artist.increase_color
+            } else {
+                artist.decrease_color
+            };
+
+            let color = bar_color.with_alpha((artist.alpha * 255.0) as u8);
+            let paint = Paint::new(color);
+
+            let cat_center = xmin + (i as f64 + 0.5) * cat_step;
+            let bottom_val = base.min(top);
+            let top_val = base.max(top);
+
+            let p_bl = self.data_to_pixel(
+                cat_center - bar_half,
+                bottom_val,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
+            );
+            let p_tr = self.data_to_pixel(
+                cat_center + bar_half,
+                top_val,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
+            );
+
+            let rect = Rect::from_points(p_bl, p_tr);
+            let bar_path = Path::rect(rect);
+            renderer.fill_path(&bar_path, &paint, Affine::IDENTITY);
+
+            // Draw value label on the bar if enabled.
+            if artist.show_values {
+                let display_val = if artist.total_indices.contains(&i) {
+                    cumsum[i]
+                } else {
+                    artist.values.data[i]
+                };
+                let label_text = format_waterfall_value(display_val);
+
+                // Position label above positive bars, below negative bars.
+                let label_y = if display_val >= 0.0 {
+                    top_val
+                } else {
+                    bottom_val
+                };
+                let label_pos = self.data_to_pixel(
+                    cat_center,
+                    label_y,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
+                );
+
+                let text_style = TextStyle {
+                    size: 10.0,
+                    color: Color::BLACK,
+                    weight: FontWeight::Normal,
+                    family: None,
+                    halign: HAlign::Center,
+                    valign: if display_val >= 0.0 {
+                        VAlign::Bottom
+                    } else {
+                        VAlign::Top
+                    },
+                };
+                let offset_pos = Point::new(
+                    label_pos.x,
+                    if display_val >= 0.0 {
+                        label_pos.y - 3.0
+                    } else {
+                        label_pos.y + 3.0
+                    },
+                );
+                renderer.draw_text(&label_text, offset_pos, &text_style, Affine::IDENTITY);
+            }
+        }
+
+        // Draw connector lines between consecutive bars.
+        if artist.connector_lines && n > 1 {
+            let connector_paint = Paint::new(Color::rgb(0x80, 0x80, 0x80).with_alpha(180));
+            let connector_stroke = Stroke::new(0.8);
+
+            for (i, &connector_y) in cumsum.iter().enumerate().take(n - 1) {
+                let right_edge = xmin + (i as f64 + 0.5) * cat_step + bar_half;
+                let left_edge = xmin + ((i + 1) as f64 + 0.5) * cat_step - bar_half;
+
+                let p_from = self.data_to_pixel(
+                    right_edge,
+                    connector_y,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
+                );
+                let p_to = self.data_to_pixel(
+                    left_edge,
+                    connector_y,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
+                );
+
+                let mut path = Path::new();
+                path.move_to(p_from.x, p_from.y);
+                path.line_to(p_to.x, p_to.y);
+                renderer.stroke_path(&path, &connector_paint, &connector_stroke, Affine::IDENTITY);
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Step 9b: Text and arrow annotations
     // -----------------------------------------------------------------------
@@ -3434,6 +4096,9 @@ impl Axes {
                     Artist::Pie(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Violin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Contour(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
+                    Artist::Polar(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
+                    Artist::Hexbin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
+                    Artist::Waterfall(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                 };
                 label.map(|l| LegendEntry { label: l.to_string(), color, swatch })
             })
@@ -3467,6 +4132,24 @@ impl Axes {
             plot_area.x + tx * plot_area.width,
             plot_area.y + (1.0 - ty) * plot_area.height, // y is inverted
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level helpers
+// ---------------------------------------------------------------------------
+
+/// Formats a waterfall bar value for display.
+///
+/// Integer-valued floats are displayed without a decimal point.
+/// Decimal values are shown with up to 2 significant decimal places,
+/// with trailing zeros stripped.
+fn format_waterfall_value(v: f64) -> String {
+    if v == v.trunc() && v.abs() < 1e15 {
+        format!("{}", v as i64)
+    } else {
+        let s = format!("{:.2}", v);
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
     }
 }
 

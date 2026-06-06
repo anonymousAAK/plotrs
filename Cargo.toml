@@ -134,6 +134,22 @@ path = "examples/18_stacked_bar.rs"
 name = "19_grouped_bar"
 path = "examples/19_grouped_bar.rs"
 
+[[example]]
+name = "20_polar"
+path = "examples/20_polar.rs"
+
+[[example]]
+name = "20_hexbin"
+path = "examples/20_hexbin.rs"
+
+[[example]]
+name = "20_themes"
+path = "examples/20_themes.rs"
+
+[[example]]
+name = "20_waterfall"
+path = "examples/20_waterfall.rs"
+
 [dev-dependencies]
 insta = { version = "1", features = ["glob"] }
 criterion = { version = "0.5", features = ["html_reports"] }

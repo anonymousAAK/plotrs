@@ -8,7 +8,8 @@
 //! - Outward ticks, readable font sizes (title 14 pt bold, labels 11 pt, ticks 9 pt).
 //!
 //! Additional built-in themes are available via [`Theme::dark()`],
-//! [`Theme::seaborn()`], [`Theme::ggplot()`], and [`Theme::publication()`].
+//! [`Theme::seaborn()`], [`Theme::ggplot()`], [`Theme::publication()`],
+//! [`Theme::nature()`], and [`Theme::solarized()`].
 
 use crate::primitives::{Color, FontWeight};
 
@@ -320,17 +321,35 @@ impl Theme {
     /// Seaborn-inspired theme with a tinted axes background and white grid.
     ///
     /// Mimics the popular seaborn `"whitegrid"` aesthetic: a pale blue-grey
-    /// axes face (`#EAEAF2`) with white grid lines over it.
+    /// axes face (`#EAEAF2`) with white grid lines over it. Top and right
+    /// spines are hidden for the characteristic despined look. Grid lines
+    /// are slightly thicker than default for visual weight against the
+    /// tinted background. Uses a muted color palette via Tableau-10 and a
+    /// sans-serif font family.
     pub fn seaborn() -> Self {
         let text = Color::rgb(0x33, 0x33, 0x33);
         let axes_bg = Color::rgb(0xEA, 0xEA, 0xF2);
+
+        // Seaborn muted palette (desaturated version of standard colors).
+        let cycle = vec![
+            Color::rgb(0x4C, 0x72, 0xB0), // muted blue
+            Color::rgb(0xDD, 0x85, 0x52), // muted orange
+            Color::rgb(0x55, 0xA8, 0x68), // muted green
+            Color::rgb(0xC4, 0x4E, 0x52), // muted red
+            Color::rgb(0x81, 0x72, 0xB3), // muted purple
+            Color::rgb(0x93, 0x7A, 0x60), // muted brown
+            Color::rgb(0xDA, 0x8B, 0xC3), // muted pink
+            Color::rgb(0x8C, 0x8C, 0x8C), // muted grey
+            Color::rgb(0xCC, 0xB9, 0x74), // muted olive
+            Color::rgb(0x64, 0xB5, 0xCD), // muted cyan
+        ];
 
         Self {
             figure_background: Color::WHITE,
             axes_background: axes_bg,
 
             grid_color: Color::WHITE,
-            grid_width: 1.0,
+            grid_width: 1.5,
             show_grid: true,
 
             spine_color: Color::rgb(0xCC, 0xCC, 0xCC),
@@ -354,20 +373,22 @@ impl Theme {
             marker_size: 6.0,
             marker_alpha: 0.8,
 
-            color_cycle: TABLEAU_10.to_vec(),
+            color_cycle: cycle,
 
-            font_family: None,
+            font_family: Some("sans-serif".to_string()),
         }
     }
 
     /// ggplot2-inspired theme with a grey panel and white grid.
     ///
     /// Reproduces the characteristic look of R's ggplot2: a medium-grey panel
-    /// (`#E5E5E5`), white major grid lines, all four spines hidden, and the
-    /// ggplot2 default qualitative palette.
+    /// (`#E5E5E5`), white major grid lines, a thin panel border around all
+    /// four sides, and the ggplot2 default qualitative palette. The title is
+    /// rendered bold in the classic ggplot2 aesthetic.
     pub fn ggplot() -> Self {
         let panel = Color::rgb(0xE5, 0xE5, 0xE5);
         let text = Color::rgb(0x30, 0x30, 0x30);
+        let border = Color::rgb(0x80, 0x80, 0x80);
 
         // Classic ggplot2 qualitative palette (first 8 hues at C=100, L=65).
         let cycle = vec![
@@ -389,13 +410,13 @@ impl Theme {
             grid_width: 1.0,
             show_grid: true,
 
-            // ggplot2 hides all spines by default.
-            spine_color: Color::WHITE,
-            spine_width: 0.0,
-            show_top_spine: false,
-            show_right_spine: false,
-            show_bottom_spine: false,
-            show_left_spine: false,
+            // Panel border around all four sides.
+            spine_color: border,
+            spine_width: 0.5,
+            show_top_spine: true,
+            show_right_spine: true,
+            show_bottom_spine: true,
+            show_left_spine: true,
 
             tick_color: text,
             tick_length: 0.0, // no visible ticks in ggplot2 default
@@ -419,10 +440,13 @@ impl Theme {
 
     /// Publication-ready theme: crisp, minimal, and suitable for print.
     ///
-    /// - Pure white background, no grid.
-    /// - All four spines visible but thin (0.5 px) in near-black.
-    /// - Inward ticks for a compact footprint.
-    /// - Serif font family for journal aesthetics.
+    /// Designed for journal submissions and academic papers at 300+ DPI:
+    ///
+    /// - Pure white background, no grid by default.
+    /// - All four thin black spines (0.5 px) for a complete panel frame.
+    /// - Inward ticks for a compact footprint that does not intrude on margins.
+    /// - Larger axis labels (12 pt) for readability at reduced figure sizes.
+    /// - Serif font family for traditional academic aesthetics.
     pub fn publication() -> Self {
         let ink = Color::rgb(0x1A, 0x1A, 0x1A);
 
@@ -446,8 +470,8 @@ impl Theme {
             tick_direction: TickDirection::Inward,
             tick_label_size: 8.0,
 
-            axis_label_size: 10.0,
-            title_size: 12.0,
+            axis_label_size: 12.0,
+            title_size: 13.0,
             title_weight: FontWeight::Bold,
             text_color: ink,
 
@@ -458,6 +482,129 @@ impl Theme {
             color_cycle: TABLEAU_10.to_vec(),
 
             font_family: Some("serif".to_string()),
+        }
+    }
+
+    /// Nature/Science journal theme: ultra-clean and compact.
+    ///
+    /// Inspired by the house style of top scientific journals such as
+    /// *Nature* and *Science*:
+    ///
+    /// - White background with no unnecessary decoration.
+    /// - Bold axis labels for immediate readability in multi-panel figures.
+    /// - Thin spines (0.75 px) on bottom and left only; top and right hidden.
+    /// - Compact font sizes suited for narrow column widths.
+    /// - Sans-serif font family (Helvetica/Arial style) per journal guidelines.
+    pub fn nature() -> Self {
+        let ink = Color::rgb(0x1A, 0x1A, 0x1A);
+
+        // Nature-style palette: high-contrast, print-safe colors.
+        let cycle = vec![
+            Color::rgb(0xE6, 0x4B, 0x35), // red
+            Color::rgb(0x4D, 0xBB, 0xD5), // teal
+            Color::rgb(0x00, 0xA0, 0x87), // green
+            Color::rgb(0x30, 0x66, 0xBE), // blue
+            Color::rgb(0xF3, 0x9B, 0x7F), // salmon
+            Color::rgb(0x87, 0x5F, 0x9A), // purple
+            Color::rgb(0xFE, 0xBE, 0x10), // gold
+            Color::rgb(0x00, 0x72, 0xB2), // dark blue
+        ];
+
+        Self {
+            figure_background: Color::WHITE,
+            axes_background: Color::WHITE,
+
+            grid_color: Color::rgb(0xDD, 0xDD, 0xDD),
+            grid_width: 0.5,
+            show_grid: false,
+
+            spine_color: ink,
+            spine_width: 0.75,
+            show_top_spine: false,
+            show_right_spine: false,
+            show_bottom_spine: true,
+            show_left_spine: true,
+
+            tick_color: ink,
+            tick_length: 3.0,
+            tick_direction: TickDirection::Outward,
+            tick_label_size: 7.0,
+
+            axis_label_size: 8.0,
+            title_size: 10.0,
+            title_weight: FontWeight::Bold,
+            text_color: ink,
+
+            line_width: 1.0,
+            marker_size: 4.0,
+            marker_alpha: 1.0,
+
+            color_cycle: cycle,
+
+            font_family: Some("sans-serif".to_string()),
+        }
+    }
+
+    /// Solarized dark theme based on the Solarized color scheme by Ethan
+    /// Schoonover.
+    ///
+    /// Uses the base03 background (`#002B36`) with Solarized content tones
+    /// for text (`#839496`) and accent colors for data series. The result is
+    /// a low-contrast, eye-friendly palette designed for extended viewing.
+    ///
+    /// This is the dark variant. A light variant could be built by swapping
+    /// base03/base0 roles.
+    pub fn solarized() -> Self {
+        let base03 = Color::rgb(0x00, 0x2B, 0x36);  // dark background
+        let base02 = Color::rgb(0x07, 0x36, 0x42);  // highlight background
+        let base01 = Color::rgb(0x58, 0x6E, 0x75);  // secondary content
+        let base0 = Color::rgb(0x83, 0x94, 0x96);   // primary content
+        let base1 = Color::rgb(0x93, 0xA1, 0xA1);   // emphasized content
+
+        // Solarized accent colors.
+        let cycle = vec![
+            Color::rgb(0x26, 0x8B, 0xD2), // blue
+            Color::rgb(0xDC, 0x32, 0x2F), // red
+            Color::rgb(0x85, 0x99, 0x00), // green
+            Color::rgb(0xB5, 0x89, 0x00), // yellow
+            Color::rgb(0x2A, 0xA1, 0x98), // cyan
+            Color::rgb(0xD3, 0x36, 0x82), // magenta
+            Color::rgb(0xCB, 0x4B, 0x16), // orange
+            Color::rgb(0x6C, 0x71, 0xC4), // violet
+        ];
+
+        Self {
+            figure_background: base03,
+            axes_background: base03,
+
+            grid_color: base02,
+            grid_width: 1.0,
+            show_grid: true,
+
+            spine_color: base01,
+            spine_width: 1.0,
+            show_top_spine: false,
+            show_right_spine: false,
+            show_bottom_spine: true,
+            show_left_spine: true,
+
+            tick_color: base0,
+            tick_length: 4.0,
+            tick_direction: TickDirection::Outward,
+            tick_label_size: 9.0,
+
+            axis_label_size: 11.0,
+            title_size: 14.0,
+            title_weight: FontWeight::Bold,
+            text_color: base1,
+
+            line_width: 1.5,
+            marker_size: 6.0,
+            marker_alpha: 0.9,
+
+            color_cycle: cycle,
+
+            font_family: Some("sans-serif".to_string()),
         }
     }
 }
@@ -569,10 +716,11 @@ mod tests {
     }
 
     #[test]
-    fn seaborn_theme_white_grid() {
+    fn seaborn_theme_white_grid_thicker() {
         let t = Theme::seaborn();
         assert_eq!(t.grid_color, Color::WHITE);
         assert!(t.show_grid);
+        assert!((t.grid_width - 1.5).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -589,12 +737,13 @@ mod tests {
     }
 
     #[test]
-    fn ggplot_theme_no_spines() {
+    fn ggplot_theme_panel_border() {
         let t = Theme::ggplot();
-        assert!(!t.show_top_spine);
-        assert!(!t.show_right_spine);
-        assert!(!t.show_bottom_spine);
-        assert!(!t.show_left_spine);
+        assert!(t.show_top_spine);
+        assert!(t.show_right_spine);
+        assert!(t.show_bottom_spine);
+        assert!(t.show_left_spine);
+        assert!((t.spine_width - 0.5).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -647,5 +796,272 @@ mod tests {
     #[test]
     fn grid_axis_default_is_both() {
         assert_eq!(GridAxis::default(), GridAxis::Both);
+    }
+
+    // -- Seaborn additional tests -------------------------------------------
+
+    #[test]
+    fn seaborn_theme_muted_palette() {
+        let t = Theme::seaborn();
+        assert_eq!(t.color_cycle.len(), 10);
+        // First color is the muted blue.
+        assert_eq!(t.color_cycle[0], Color::rgb(0x4C, 0x72, 0xB0));
+    }
+
+    #[test]
+    fn seaborn_theme_no_top_right_spines() {
+        let t = Theme::seaborn();
+        assert!(!t.show_top_spine);
+        assert!(!t.show_right_spine);
+        assert!(t.show_bottom_spine);
+        assert!(t.show_left_spine);
+    }
+
+    #[test]
+    fn seaborn_theme_sans_serif_font() {
+        let t = Theme::seaborn();
+        assert_eq!(t.font_family, Some("sans-serif".to_string()));
+    }
+
+    // -- Publication additional tests ---------------------------------------
+
+    #[test]
+    fn publication_theme_larger_axis_labels() {
+        let t = Theme::publication();
+        assert!((t.axis_label_size - 12.0).abs() < f64::EPSILON);
+    }
+
+    // -- Nature theme tests -------------------------------------------------
+
+    #[test]
+    fn nature_theme_constructs_without_panic() {
+        let _t = Theme::nature();
+    }
+
+    #[test]
+    fn nature_theme_white_background() {
+        let t = Theme::nature();
+        assert_eq!(t.figure_background, Color::WHITE);
+        assert_eq!(t.axes_background, Color::WHITE);
+    }
+
+    #[test]
+    fn nature_theme_no_grid() {
+        let t = Theme::nature();
+        assert!(!t.show_grid);
+    }
+
+    #[test]
+    fn nature_theme_thin_spines() {
+        let t = Theme::nature();
+        assert!((t.spine_width - 0.75).abs() < f64::EPSILON);
+        assert!(!t.show_top_spine);
+        assert!(!t.show_right_spine);
+        assert!(t.show_bottom_spine);
+        assert!(t.show_left_spine);
+    }
+
+    #[test]
+    fn nature_theme_compact_font_sizes() {
+        let t = Theme::nature();
+        assert!((t.tick_label_size - 7.0).abs() < f64::EPSILON);
+        assert!((t.axis_label_size - 8.0).abs() < f64::EPSILON);
+        assert!((t.title_size - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn nature_theme_bold_labels() {
+        let t = Theme::nature();
+        assert_eq!(t.title_weight, FontWeight::Bold);
+    }
+
+    #[test]
+    fn nature_theme_sans_serif_font() {
+        let t = Theme::nature();
+        assert_eq!(t.font_family, Some("sans-serif".to_string()));
+    }
+
+    #[test]
+    fn nature_theme_palette() {
+        let t = Theme::nature();
+        assert_eq!(t.color_cycle.len(), 8);
+        // First color is the signature Nature red.
+        assert_eq!(t.color_cycle[0], Color::rgb(0xE6, 0x4B, 0x35));
+    }
+
+    #[test]
+    fn nature_theme_small_markers() {
+        let t = Theme::nature();
+        assert!((t.marker_size - 4.0).abs() < f64::EPSILON);
+        assert!((t.marker_alpha - 1.0).abs() < f64::EPSILON);
+    }
+
+    // -- Solarized theme tests ----------------------------------------------
+
+    #[test]
+    fn solarized_theme_constructs_without_panic() {
+        let _t = Theme::solarized();
+    }
+
+    #[test]
+    fn solarized_theme_dark_background() {
+        let t = Theme::solarized();
+        // Solarized base03
+        assert_eq!(t.figure_background, Color::rgb(0x00, 0x2B, 0x36));
+        assert_eq!(t.axes_background, Color::rgb(0x00, 0x2B, 0x36));
+    }
+
+    #[test]
+    fn solarized_theme_content_text_color() {
+        let t = Theme::solarized();
+        // Solarized base1 for emphasized content
+        assert_eq!(t.text_color, Color::rgb(0x93, 0xA1, 0xA1));
+    }
+
+    #[test]
+    fn solarized_theme_accent_palette() {
+        let t = Theme::solarized();
+        assert_eq!(t.color_cycle.len(), 8);
+        // First accent is Solarized blue.
+        assert_eq!(t.color_cycle[0], Color::rgb(0x26, 0x8B, 0xD2));
+        // Verify all 8 Solarized accent colors are present.
+        assert_eq!(t.color_cycle[7], Color::rgb(0x6C, 0x71, 0xC4)); // violet
+    }
+
+    #[test]
+    fn solarized_theme_grid_uses_base02() {
+        let t = Theme::solarized();
+        assert_eq!(t.grid_color, Color::rgb(0x07, 0x36, 0x42));
+        assert!(t.show_grid);
+    }
+
+    #[test]
+    fn solarized_theme_sans_serif_font() {
+        let t = Theme::solarized();
+        assert_eq!(t.font_family, Some("sans-serif".to_string()));
+    }
+
+    #[test]
+    fn solarized_theme_despine_look() {
+        let t = Theme::solarized();
+        assert!(!t.show_top_spine);
+        assert!(!t.show_right_spine);
+        assert!(t.show_bottom_spine);
+        assert!(t.show_left_spine);
+    }
+
+    // -- Cross-theme distinctness tests -------------------------------------
+
+    #[test]
+    fn all_themes_have_distinct_backgrounds() {
+        let themes: Vec<(&str, Theme)> = vec![
+            ("default", Theme::default()),
+            ("dark", Theme::dark()),
+            ("seaborn", Theme::seaborn()),
+            ("ggplot", Theme::ggplot()),
+            ("publication", Theme::publication()),
+            ("nature", Theme::nature()),
+            ("solarized", Theme::solarized()),
+        ];
+        // Collect unique (figure_bg, axes_bg) pairs. We expect at least 4
+        // distinct combinations (default/publication/nature share white, but
+        // dark, seaborn, ggplot, solarized differ).
+        let mut backgrounds: Vec<(Color, Color)> = themes
+            .iter()
+            .map(|(_, t)| (t.figure_background, t.axes_background))
+            .collect();
+        backgrounds.sort_by_key(|(f, a)| (f.r, f.g, f.b, a.r, a.g, a.b));
+        backgrounds.dedup();
+        assert!(
+            backgrounds.len() >= 4,
+            "Expected at least 4 distinct background combos, got {}",
+            backgrounds.len()
+        );
+    }
+
+    #[test]
+    fn all_themes_have_reasonable_spine_widths() {
+        let themes = [
+            Theme::default(),
+            Theme::dark(),
+            Theme::seaborn(),
+            Theme::ggplot(),
+            Theme::publication(),
+            Theme::nature(),
+            Theme::solarized(),
+        ];
+        for t in &themes {
+            assert!(
+                t.spine_width >= 0.0 && t.spine_width <= 3.0,
+                "spine_width {} out of reasonable range",
+                t.spine_width
+            );
+        }
+    }
+
+    #[test]
+    fn all_themes_have_reasonable_tick_sizes() {
+        let themes = [
+            Theme::default(),
+            Theme::dark(),
+            Theme::seaborn(),
+            Theme::ggplot(),
+            Theme::publication(),
+            Theme::nature(),
+            Theme::solarized(),
+        ];
+        for t in &themes {
+            assert!(
+                t.tick_length >= 0.0 && t.tick_length <= 10.0,
+                "tick_length {} out of reasonable range",
+                t.tick_length
+            );
+            assert!(
+                t.tick_label_size >= 5.0 && t.tick_label_size <= 16.0,
+                "tick_label_size {} out of reasonable range",
+                t.tick_label_size
+            );
+        }
+    }
+
+    #[test]
+    fn each_theme_has_nonempty_color_cycle() {
+        let themes = [
+            Theme::default(),
+            Theme::dark(),
+            Theme::seaborn(),
+            Theme::ggplot(),
+            Theme::publication(),
+            Theme::nature(),
+            Theme::solarized(),
+        ];
+        for t in &themes {
+            assert!(
+                !t.color_cycle.is_empty(),
+                "color_cycle must not be empty"
+            );
+        }
+    }
+
+    #[test]
+    fn nature_and_publication_are_distinct() {
+        let n = Theme::nature();
+        let p = Theme::publication();
+        // They should differ in font family, spine configuration, and sizes.
+        assert_ne!(n.font_family, p.font_family);
+        assert_ne!(n.show_top_spine, p.show_top_spine);
+        assert!((n.axis_label_size - p.axis_label_size).abs() > f64::EPSILON);
+    }
+
+    #[test]
+    fn solarized_and_dark_are_distinct() {
+        let s = Theme::solarized();
+        let d = Theme::dark();
+        // Different backgrounds.
+        assert_ne!(s.figure_background, d.figure_background);
+        // Different palettes.
+        assert_ne!(s.color_cycle[0], d.color_cycle[0]);
+        // Different text colors.
+        assert_ne!(s.text_color, d.text_color);
     }
 }

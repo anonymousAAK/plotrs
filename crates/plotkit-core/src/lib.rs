@@ -25,6 +25,7 @@ pub mod legend;
 pub mod charts;
 pub mod colormap;
 pub mod colorbar;
+pub mod decimate;
 
 /// The plotkit-core prelude — import common types with a single `use` statement.
 pub mod prelude {
@@ -39,4 +40,5 @@ pub mod prelude {
     pub use crate::colorbar::{Colorbar, ColorbarOrientation};
     pub use crate::annotations::{ArrowStyle, TextAnnotation, Annotation};
     pub use crate::primitives::{HAlign, VAlign};
+    pub use crate::decimate::DecimateMethod;
 }

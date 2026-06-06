@@ -14,6 +14,7 @@
 //! ```
 
 use crate::artist::LineArtist;
+use crate::decimate::DecimateMethod;
 use crate::primitives::Color;
 use crate::theme::LineStyle;
 
@@ -91,6 +92,40 @@ impl LineArtist {
     /// ```
     pub fn alpha(&mut self, alpha: f64) -> &mut Self {
         self.alpha = alpha.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Enables LTTB decimation with the given point threshold.
+    ///
+    /// When the data series length exceeds `threshold`, the rendering
+    /// pipeline downsamples the data using the Largest Triangle Three
+    /// Buckets algorithm before drawing. This dramatically improves
+    /// rendering performance for large datasets (100k+ points) with
+    /// negligible visual impact.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// ax.plot(&x, &y)?.decimate(1000);
+    /// ```
+    pub fn decimate(&mut self, threshold: usize) -> &mut Self {
+        self.decimate = Some((threshold, DecimateMethod::Lttb));
+        self
+    }
+
+    /// Enables decimation with a specific method and point threshold.
+    ///
+    /// Available methods:
+    /// - [`DecimateMethod::Lttb`] — best visual fidelity (default)
+    /// - [`DecimateMethod::MinMax`] — fastest, preserves peaks/troughs
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// ax.plot(&x, &y)?.decimate_with(1000, DecimateMethod::MinMax);
+    /// ```
+    pub fn decimate_with(&mut self, threshold: usize, method: DecimateMethod) -> &mut Self {
+        self.decimate = Some((threshold, method));
         self
     }
 }
