@@ -18,14 +18,39 @@ pub const DEFAULT_FONT_FAMILY: &str = "Inter";
 const DEFAULT_FONT_REGULAR: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
 const DEFAULT_FONT_BOLD: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
 
-/// Creates a `FontSystem` loaded only with the embedded Inter font.
+/// Builds the embedded font database from scratch.
 ///
-/// This avoids system font discovery for deterministic cross-platform rendering.
-fn embedded_font_system() -> FontSystem {
+/// This is the expensive step: `load_font_data` parses and indexes each TTF
+/// face via `ttf-parser`. It must run only once per thread; the result is
+/// cached in [`EMBEDDED_FONT_DB`] and cheaply cloned for each renderer.
+fn build_embedded_font_db() -> cosmic_text::fontdb::Database {
     let mut db = cosmic_text::fontdb::Database::new();
     db.load_font_data(DEFAULT_FONT_REGULAR.to_vec());
     db.load_font_data(DEFAULT_FONT_BOLD.to_vec());
     db.set_sans_serif_family(DEFAULT_FONT_FAMILY);
+    db
+}
+
+thread_local! {
+    /// Per-thread cache of the parsed embedded font database.
+    ///
+    /// The font faces are parsed and indexed exactly once per thread. Each
+    /// renderer clones this database: `fontdb::Database` derives `Clone`, and
+    /// the underlying font bytes are stored behind `Arc`, so cloning copies the
+    /// already-parsed face metadata and bumps reference counts rather than
+    /// re-running the TTF parse. This removes the dominant fixed cost from
+    /// small/cold renders while leaving output byte-identical.
+    static EMBEDDED_FONT_DB: cosmic_text::fontdb::Database = build_embedded_font_db();
+}
+
+/// Creates a `FontSystem` loaded only with the embedded Inter font.
+///
+/// This avoids system font discovery for deterministic cross-platform
+/// rendering. The parsed font database is cached per thread (see
+/// [`EMBEDDED_FONT_DB`]) and cloned here, so the costly TTF parse happens only
+/// once per thread instead of on every renderer construction.
+fn embedded_font_system() -> FontSystem {
+    let db = EMBEDDED_FONT_DB.with(|cached| cached.clone());
     FontSystem::new_with_locale_and_db("en-US".into(), db)
 }
 
