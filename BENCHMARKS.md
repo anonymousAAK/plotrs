@@ -13,26 +13,32 @@ of the confidence interval (the middle of `[lower median upper]`).
 
 | Workload | Target | Measured (median) | Status |
 | --- | --- | --- | --- |
-| 10k-point line → PNG | < 15 ms | 65.615 ms | ❌ |
-| 100k-point line → PNG (with LTTB) | < 60 ms | 50.407 ms | ✅ |
-| 1M-point scatter → PNG (decimated) | < 250 ms | 76.816 ms | ✅ |
-| Cold render of default line plot | < 8 ms | 37.831 ms | ❌ |
+| 10k-point line → PNG | < 15 ms | 10.878 ms | ✅ |
+| 100k-point line → PNG (with LTTB) | < 60 ms | 13.670 ms | ✅ |
+| 1M-point scatter → PNG (decimated) | < 250 ms | 33.744 ms | ✅ |
+| Cold render of default line plot | < 8 ms | 10.728 ms | ❌ |
 
-### Notes on the failing targets
+Three of the four targets pass, two of them by a wide margin. The numbers above
+reflect the v0.6.0 render path: backend scratch-buffer reuse (no per-primitive
+path allocation), automatic LTTB decimation for large line/scatter series, and a
+per-thread cache of the parsed embedded-font database so font data is no longer
+re-parsed on every render.
 
-- **10k-point line → PNG (65.6 ms vs 15 ms target):** the cost here is dominated
-  by per-figure rasterization and text shaping rather than the 10k vertices
-  themselves — the same fixed overhead also drives the cold-render miss below.
-- **Cold render of default line plot (37.8 ms vs 8 ms target):** a single cold
-  render pays the full font-system / layout / rasterizer setup cost on this
-  machine. The render path and automatic decimation are being optimized
-  concurrently, so this is expected to drop on a later run; re-running
-  `cargo bench` after those land may move both of the above into ✅.
+### Note on the remaining miss
 
-The two passing targets (100k LTTB line and 1M decimated scatter) clear their
-budgets comfortably — decimation keeps the rasterizer working on a screen-sized
-point count regardless of the input size, which is exactly why the 1M scatter is
-faster than the raw 10k line.
+- **Cold render of default line plot (10.7 ms vs 8 ms target):** a single cold
+  render of the default plot pays the framework floor — pixmap allocation plus
+  text shaping and glyph rasterization for the title, axis labels, and ticks —
+  none of which scale with data size. At 10.7 ms it is still roughly an order of
+  magnitude faster than an equivalent cold matplotlib render, but it sits ~2.7 ms
+  over the aggressive 8 ms budget. Closing the gap means trimming first-render
+  text-layout cost (glyph-cache warm-up, label shaping) and is tracked as a
+  follow-up; it is not a regression.
+
+The 100k LTTB line and 1M decimated scatter clear their budgets comfortably —
+decimation keeps the rasterizer working on a screen-sized point count regardless
+of input size, which is why the 1M scatter renders faster than the raw 10k line
+once both go through the same draw path.
 
 ## Other measured workloads
 
@@ -40,13 +46,13 @@ These are not TRD targets but are tracked for regression visibility:
 
 | Workload | Measured (median) |
 | --- | --- |
-| scatter_10k → PNG | 190.31 ms |
-| bar_100 → PNG | 24.842 ms |
-| histogram_10k → PNG | 30.315 ms |
-| svg_line_10k → SVG string | 6.5082 ms |
-| figure_creation (no render) | 556.76 ns |
-| tick_generation (8 ranges) | 10.757 ms |
-| multi_subplot 4×4 → PNG | 80.890 ms |
+| scatter_10k → PNG | 39.798 ms |
+| bar_100 → PNG | 22.173 ms |
+| histogram_10k → PNG | 11.760 ms |
+| svg_line_10k → SVG string | 4.0463 ms |
+| figure_creation (no render) | 434.33 ns |
+| tick_generation (8 ranges) | 8.7074 ms |
+| multi_subplot 4×4 → PNG | 69.293 ms |
 
 ## Methodology
 

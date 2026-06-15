@@ -1,6 +1,6 @@
 [package]
 name = "plotkit-render-svg"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 rust-version = "1.75"
 description = "SVG rendering backend for plotkit"
@@ -8,4 +8,4 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/anonymousAAK/plotrs"
 
 [dependencies]
-plotkit-core = { path = "../plotkit-core", version = "0.5.0" }
+plotkit-core = { path = "../plotkit-core", version = "0.6.0" }
