@@ -42,6 +42,10 @@ pub struct SkiaRenderer {
     font_system: RefCell<FontSystem>,
     swash_cache: SwashCache,
     clip_stack: Vec<tiny_skia::Mask>,
+    /// Recyclable path builder. Its backing storage (verbs + points) is
+    /// reclaimed after every draw via `tiny_skia::Path::clear`, so the
+    /// per-primitive `PathBuilder` allocation is eliminated in the hot path.
+    path_builder: Option<tiny_skia::PathBuilder>,
 }
 
 impl SkiaRenderer {
@@ -63,6 +67,7 @@ impl SkiaRenderer {
             font_system,
             swash_cache,
             clip_stack: Vec::new(),
+            path_builder: Some(tiny_skia::PathBuilder::new()),
         }
     }
 
@@ -133,6 +138,33 @@ impl SkiaRenderer {
 
         (total_w, max_ascent, max_descent, line_height)
     }
+
+    /// Builds a `tiny_skia::Path` from a plotkit [`Path`] using the recyclable
+    /// builder held on the renderer.
+    ///
+    /// Returns `None` for empty/degenerate paths. On `None`, a fresh empty
+    /// builder is restored so the recyclable slot is never left vacant.
+    fn take_built_path(&mut self, path: &Path) -> Option<tiny_skia::Path> {
+        let mut pb = self.path_builder.take().unwrap_or_default();
+        pb.clear();
+        fill_builder(&mut pb, path);
+        match pb.finish() {
+            Some(sk_path) => Some(sk_path),
+            None => {
+                // `finish` consumed the builder even though it produced nothing;
+                // restore an empty builder so the slot stays populated.
+                self.path_builder = Some(tiny_skia::PathBuilder::new());
+                None
+            }
+        }
+    }
+
+    /// Reclaims the backing storage of a finished path back into the recyclable
+    /// builder slot, retaining its capacity for the next primitive.
+    #[inline]
+    fn recycle_path(&mut self, sk_path: tiny_skia::Path) {
+        self.path_builder = Some(sk_path.clear());
+    }
 }
 
 /// Alpha-blend a single source pixel onto a destination pixel buffer.
@@ -181,7 +213,7 @@ impl Renderer for SkiaRenderer {
     }
 
     fn fill_path(&mut self, path: &Path, paint: &Paint, transform: Affine) {
-        let Some(sk_path) = convert_path(path) else {
+        let Some(sk_path) = self.take_built_path(path) else {
             return;
         };
         let sk_paint = convert_paint(paint);
@@ -194,6 +226,8 @@ impl Renderer for SkiaRenderer {
             sk_transform,
             self.clip_stack.last(),
         );
+
+        self.recycle_path(sk_path);
     }
 
     fn stroke_path(
@@ -203,7 +237,7 @@ impl Renderer for SkiaRenderer {
         stroke: &Stroke,
         transform: Affine,
     ) {
-        let Some(sk_path) = convert_path(path) else {
+        let Some(sk_path) = self.take_built_path(path) else {
             return;
         };
         let sk_paint = convert_paint(paint);
@@ -217,6 +251,8 @@ impl Renderer for SkiaRenderer {
             sk_transform,
             self.clip_stack.last(),
         );
+
+        self.recycle_path(sk_path);
     }
 
     fn draw_text(&mut self, text: &str, pos: Point, style: &TextStyle, _transform: Affine) {
@@ -404,11 +440,11 @@ impl Renderer for SkiaRenderer {
 // Conversion helpers
 // ============================================================================
 
-/// Converts a plotkit [`Path`] into a `tiny_skia::Path`.
+/// Populates a (cleared) `tiny_skia::PathBuilder` from a plotkit [`Path`].
 ///
-/// Returns `None` if the path is empty or contains invalid geometry.
-fn convert_path(path: &Path) -> Option<tiny_skia::Path> {
-    let mut pb = tiny_skia::PathBuilder::new();
+/// The builder is appended to in place so its backing storage can be reused
+/// across primitives. The caller is responsible for clearing it beforehand.
+fn fill_builder(pb: &mut tiny_skia::PathBuilder, path: &Path) {
     for el in &path.elements {
         match *el {
             PathEl::MoveTo(p) => pb.move_to(p.x as f32, p.y as f32),
@@ -429,6 +465,16 @@ fn convert_path(path: &Path) -> Option<tiny_skia::Path> {
             PathEl::ClosePath => pb.close(),
         }
     }
+}
+
+/// Converts a plotkit [`Path`] into a `tiny_skia::Path`.
+///
+/// Returns `None` if the path is empty or contains invalid geometry. This
+/// non-recycling form is used by `push_clip` (which builds a one-off path) and
+/// by unit tests.
+fn convert_path(path: &Path) -> Option<tiny_skia::Path> {
+    let mut pb = tiny_skia::PathBuilder::new();
+    fill_builder(&mut pb, path);
     pb.finish()
 }
 

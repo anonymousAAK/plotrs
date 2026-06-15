@@ -14,7 +14,7 @@
 //! ```
 
 use crate::artist::LineArtist;
-use crate::decimate::DecimateMethod;
+use crate::decimate::{DecimateMethod, DecimateMode};
 use crate::primitives::Color;
 use crate::theme::LineStyle;
 
@@ -95,7 +95,7 @@ impl LineArtist {
         self
     }
 
-    /// Enables LTTB decimation with the given point threshold.
+    /// Enables LTTB decimation with the given explicit point threshold.
     ///
     /// When the data series length exceeds `threshold`, the rendering
     /// pipeline downsamples the data using the Largest Triangle Three
@@ -103,17 +103,21 @@ impl LineArtist {
     /// rendering performance for large datasets (100k+ points) with
     /// negligible visual impact.
     ///
+    /// This overrides the default [`DecimateMode::Auto`] behavior with an
+    /// explicit threshold. To disable decimation entirely, use
+    /// [`no_decimate`](Self::no_decimate).
+    ///
     /// # Examples
     ///
     /// ```ignore
     /// ax.plot(&x, &y)?.decimate(1000);
     /// ```
     pub fn decimate(&mut self, threshold: usize) -> &mut Self {
-        self.decimate = Some((threshold, DecimateMethod::Lttb));
+        self.decimate = DecimateMode::Explicit(threshold, DecimateMethod::Lttb);
         self
     }
 
-    /// Enables decimation with a specific method and point threshold.
+    /// Enables decimation with a specific method and explicit point threshold.
     ///
     /// Available methods:
     /// - [`DecimateMethod::Lttb`] — best visual fidelity (default)
@@ -125,7 +129,118 @@ impl LineArtist {
     /// ax.plot(&x, &y)?.decimate_with(1000, DecimateMethod::MinMax);
     /// ```
     pub fn decimate_with(&mut self, threshold: usize, method: DecimateMethod) -> &mut Self {
-        self.decimate = Some((threshold, method));
+        self.decimate = DecimateMode::Explicit(threshold, method);
         self
+    }
+
+    /// Disables decimation entirely, drawing every point.
+    ///
+    /// By default large series are auto-decimated via
+    /// [`DecimateMode::Auto`]. Call this when exact point-for-point rendering
+    /// is required regardless of series size.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// ax.plot(&x, &y)?.no_decimate();
+    /// ```
+    pub fn no_decimate(&mut self) -> &mut Self {
+        self.decimate = DecimateMode::Off;
+        self
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use crate::axes::Axes;
+    use crate::decimate::{DecimateMethod, DecimateMode, DEFAULT_DECIMATE_THRESHOLD};
+
+    fn make_axes() -> Axes {
+        Axes::new()
+    }
+
+    #[test]
+    fn line_defaults_to_auto_decimate() {
+        let mut ax = make_axes();
+        let artist = ax.plot(&[0.0, 1.0, 2.0], &[0.0, 1.0, 2.0]).unwrap();
+        assert_eq!(artist.decimate, DecimateMode::Auto);
+    }
+
+    #[test]
+    fn line_decimate_sets_explicit_lttb() {
+        let mut ax = make_axes();
+        let artist = ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        artist.decimate(1000);
+        assert_eq!(
+            artist.decimate,
+            DecimateMode::Explicit(1000, DecimateMethod::Lttb)
+        );
+    }
+
+    #[test]
+    fn line_decimate_with_sets_explicit_method() {
+        let mut ax = make_axes();
+        let artist = ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        artist.decimate_with(500, DecimateMethod::MinMax);
+        assert_eq!(
+            artist.decimate,
+            DecimateMode::Explicit(500, DecimateMethod::MinMax)
+        );
+    }
+
+    #[test]
+    fn line_no_decimate_disables() {
+        let mut ax = make_axes();
+        let artist = ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        artist.no_decimate();
+        assert_eq!(artist.decimate, DecimateMode::Off);
+    }
+
+    #[test]
+    fn line_auto_kicks_in_above_threshold() {
+        let n = DEFAULT_DECIMATE_THRESHOLD + 1000;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.01).sin()).collect();
+        let indices = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), DEFAULT_DECIMATE_THRESHOLD);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
+    }
+
+    #[test]
+    fn line_auto_no_op_at_or_below_threshold() {
+        let n = DEFAULT_DECIMATE_THRESHOLD;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), n);
+        assert_eq!(indices.first().copied(), Some(0));
+        assert_eq!(indices.last().copied(), Some(n - 1));
+    }
+
+    #[test]
+    fn line_no_decimate_draws_all_points_even_when_huge() {
+        let n = DEFAULT_DECIMATE_THRESHOLD * 2;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices = DecimateMode::Off.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), n);
+    }
+
+    #[test]
+    fn line_explicit_overrides_auto_threshold() {
+        // 6000 points: auto would cut to 5000, but explicit 100 wins.
+        let n = 6000;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.05).sin()).collect();
+        let indices =
+            DecimateMode::Explicit(100, DecimateMethod::Lttb).resolve_indices(&x, &y);
+        assert_eq!(indices.len(), 100);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
     }
 }

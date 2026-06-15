@@ -221,7 +221,7 @@ impl Axes {
             style: crate::theme::LineStyle::Solid,
             label: None,
             alpha: 1.0,
-            decimate: None,
+            decimate: crate::decimate::DecimateMode::Auto,
         };
         self.artists.push(Artist::Line(artist));
         match self.artists.last_mut().expect("just pushed") {
@@ -267,6 +267,7 @@ impl Axes {
             colors: None,
             c: None,
             cmap: None,
+            decimate: crate::decimate::DecimateMode::Auto,
         };
         self.artists.push(Artist::Scatter(artist));
         match self.artists.last_mut().expect("just pushed") {
@@ -1929,21 +1930,12 @@ impl Axes {
             return;
         }
 
-        // Compute the set of indices to draw (possibly decimated).
-        let indices: Vec<usize> = match artist.decimate {
-            Some((threshold, method)) if artist.x.len() > threshold => {
-                use crate::decimate::{self, DecimateMethod};
-                match method {
-                    DecimateMethod::Lttb => {
-                        decimate::lttb(&artist.x.data, &artist.y.data, threshold)
-                    }
-                    DecimateMethod::MinMax => {
-                        decimate::minmax(&artist.x.data, &artist.y.data, threshold)
-                    }
-                }
-            }
-            _ => (0..artist.x.len()).collect(),
-        };
+        // Compute the set of indices to draw (possibly decimated). The mode
+        // (auto / off / explicit) is resolved by a single pure function so the
+        // result is deterministic for a given input.
+        let indices: Vec<usize> = artist
+            .decimate
+            .resolve_indices(&artist.x.data, &artist.y.data);
 
         if indices.is_empty() {
             return;
@@ -2022,7 +2014,15 @@ impl Axes {
         let default_paint = Paint::new(default_color);
         let radius = artist.size / 2.0;
 
-        for i in 0..artist.x.len() {
+        // Resolve the set of point indices to draw (possibly decimated). The
+        // mode (auto / off / explicit) is resolved by a single pure function,
+        // and per-point styling is indexed by the original index so colors stay
+        // synchronized with their points after decimation.
+        let indices = artist
+            .decimate
+            .resolve_indices(&artist.x.data, &artist.y.data);
+
+        for &i in &indices {
             let pt = self.data_to_pixel(
                 artist.x.data[i],
                 artist.y.data[i],

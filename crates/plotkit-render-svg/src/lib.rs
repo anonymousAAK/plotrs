@@ -12,6 +12,10 @@ pub struct SvgRenderer {
     height: u32,
     content: String,
     clip_id: usize,
+    /// Reusable scratch buffer for serializing path `d` data. Cleared (not
+    /// reallocated) between primitives so the per-draw `String` allocation is
+    /// eliminated in the hot path.
+    path_scratch: String,
 }
 
 impl SvgRenderer {
@@ -22,6 +26,7 @@ impl SvgRenderer {
             height,
             content: String::with_capacity(4096),
             clip_id: 0,
+            path_scratch: String::with_capacity(256),
         }
     }
 
@@ -39,8 +44,14 @@ impl SvgRenderer {
         }
     }
 
-    fn path_to_svg_d(path: &Path) -> String {
-        let mut d = String::new();
+    /// Serializes a path's `d` attribute into the given buffer.
+    ///
+    /// The buffer is cleared first, then filled. Held as a reusable scratch
+    /// buffer on the renderer, this avoids one heap allocation per drawn path.
+    /// The byte layout matches the previous allocating implementation exactly
+    /// (a trailing space is emitted and trimmed by callers).
+    fn write_path_d(d: &mut String, path: &Path) {
+        d.clear();
         for el in &path.elements {
             match *el {
                 PathEl::MoveTo(p) => write!(d, "M{:.2} {:.2} ", p.x, p.y).unwrap(),
@@ -59,7 +70,6 @@ impl SvgRenderer {
                 PathEl::ClosePath => d.push_str("Z "),
             }
         }
-        d
     }
 }
 
@@ -69,19 +79,20 @@ impl Renderer for SvgRenderer {
     }
 
     fn fill_path(&mut self, path: &Path, paint: &Paint, _transform: Affine) {
-        let d = Self::path_to_svg_d(path);
+        Self::write_path_d(&mut self.path_scratch, path);
         let color = Self::color_to_css(&paint.color);
         writeln!(
             self.content,
             "<path d=\"{}\" fill=\"{}\"/>",
-            d.trim_end(),
+            self.path_scratch.trim_end(),
             color
         )
         .unwrap();
     }
 
     fn stroke_path(&mut self, path: &Path, paint: &Paint, stroke: &Stroke, _transform: Affine) {
-        let d = Self::path_to_svg_d(path);
+        Self::write_path_d(&mut self.path_scratch, path);
+        let d = self.path_scratch.trim_end();
         let color = Self::color_to_css(&paint.color);
 
         let cap = match stroke.cap {
@@ -96,26 +107,34 @@ impl Renderer for SvgRenderer {
             StrokeJoin::Bevel => "bevel",
         };
 
-        let mut attrs = format!(
+        // Write directly into the content buffer instead of building a
+        // throwaway `attrs` String. Byte layout is unchanged.
+        write!(
+            self.content,
             "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"{:.2}\" stroke-linecap=\"{}\" stroke-linejoin=\"{}\"",
-            d.trim_end(),
+            d,
             color,
             stroke.width,
             cap,
             join,
-        );
+        )
+        .unwrap();
 
         if let Some(ref dash) = stroke.dash {
-            let dash_str: Vec<String> =
-                dash.dashes.iter().map(|v| format!("{:.2}", v)).collect();
-            write!(attrs, " stroke-dasharray=\"{}\"", dash_str.join(",")).unwrap();
+            self.content.push_str(" stroke-dasharray=\"");
+            for (i, v) in dash.dashes.iter().enumerate() {
+                if i > 0 {
+                    self.content.push(',');
+                }
+                write!(self.content, "{:.2}", v).unwrap();
+            }
+            self.content.push('"');
             if dash.offset != 0.0 {
-                write!(attrs, " stroke-dashoffset=\"{:.2}\"", dash.offset).unwrap();
+                write!(self.content, " stroke-dashoffset=\"{:.2}\"", dash.offset).unwrap();
             }
         }
 
-        attrs.push_str("/>\n");
-        self.content.push_str(&attrs);
+        self.content.push_str("/>\n");
     }
 
     fn draw_text(&mut self, text: &str, pos: Point, style: &TextStyle, _transform: Affine) {
@@ -165,12 +184,12 @@ impl Renderer for SvgRenderer {
     fn push_clip(&mut self, path: &Path, _transform: Affine) {
         let id = self.clip_id;
         self.clip_id += 1;
-        let d = Self::path_to_svg_d(path);
+        Self::write_path_d(&mut self.path_scratch, path);
         write!(
             self.content,
             "<defs><clipPath id=\"clip{}\"><path d=\"{}\"/></clipPath></defs>\n<g clip-path=\"url(#clip{})\">\n",
             id,
-            d.trim_end(),
+            self.path_scratch.trim_end(),
             id,
         )
         .unwrap();

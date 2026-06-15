@@ -40,5 +40,5 @@ pub mod prelude {
     pub use crate::colorbar::{Colorbar, ColorbarOrientation};
     pub use crate::annotations::{ArrowStyle, TextAnnotation, Annotation};
     pub use crate::primitives::{HAlign, VAlign};
-    pub use crate::decimate::DecimateMethod;
+    pub use crate::decimate::{DecimateMethod, DecimateMode};
 }

@@ -35,7 +35,7 @@
 
 use crate::charts::boxplot::BoxStats;
 use crate::colormap::Colormap;
-use crate::decimate::DecimateMethod;
+use crate::decimate::DecimateMode;
 use crate::primitives::Color;
 use crate::series::{Categories, Series};
 use crate::theme::{LineStyle, Marker};
@@ -209,10 +209,13 @@ pub struct LineArtist {
     pub label: Option<String>,
     /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
     pub alpha: f64,
-    /// Optional decimation: `(threshold, method)`. When set and data length
-    /// exceeds `threshold`, the rendering pipeline downsamples the data
-    /// before drawing.
-    pub decimate: Option<(usize, DecimateMethod)>,
+    /// Controls how the series is downsampled before drawing.
+    ///
+    /// Defaults to [`DecimateMode::Auto`], which downsamples series larger than
+    /// [`DEFAULT_DECIMATE_THRESHOLD`](crate::decimate::DEFAULT_DECIMATE_THRESHOLD)
+    /// using LTTB. Use the builder methods (`.decimate`, `.decimate_with`,
+    /// `.no_decimate`) to override.
+    pub decimate: DecimateMode,
 }
 
 impl LineArtist {
@@ -264,6 +267,16 @@ pub struct ScatterArtist {
     pub c: Option<Vec<f64>>,
     /// Optional colormap used to map `c` values to colors.
     pub cmap: Option<Colormap>,
+    /// Controls how the series is downsampled before drawing.
+    ///
+    /// Defaults to [`DecimateMode::Auto`], which downsamples series larger than
+    /// [`DEFAULT_DECIMATE_THRESHOLD`](crate::decimate::DEFAULT_DECIMATE_THRESHOLD)
+    /// using LTTB. Use the builder methods (`.decimate`, `.decimate_with`,
+    /// `.no_decimate`) to override.
+    ///
+    /// Per-point styling (`colors`, `c`) is honored by re-indexing through the
+    /// selected indices, so decimation never desynchronizes colors from points.
+    pub decimate: DecimateMode,
 }
 
 impl ScatterArtist {
@@ -1169,7 +1182,7 @@ mod tests {
             style: LineStyle::Solid,
             label: Some("line".to_string()),
             alpha: 1.0,
-            decimate: None,
+            decimate: DecimateMode::Auto,
         }
     }
 
@@ -1186,6 +1199,7 @@ mod tests {
             colors: None,
             c: None,
             cmap: None,
+            decimate: DecimateMode::Auto,
         }
     }
 
@@ -1286,7 +1300,7 @@ mod tests {
             style: LineStyle::Solid,
             label: None,
             alpha: 1.0,
-            decimate: None,
+            decimate: DecimateMode::Auto,
         };
         assert_eq!(a.data_bounds(), (0.0, 1.0, 0.0, 1.0));
     }
@@ -1301,7 +1315,7 @@ mod tests {
             style: LineStyle::Solid,
             label: None,
             alpha: 1.0,
-            decimate: None,
+            decimate: DecimateMode::Auto,
         };
         assert_eq!(a.data_bounds(), (2.0, 5.0, 1.0, 3.0));
     }
@@ -1327,6 +1341,7 @@ mod tests {
             colors: None,
             c: None,
             cmap: None,
+            decimate: DecimateMode::Auto,
         };
         assert_eq!(a.data_bounds(), (0.0, 1.0, 0.0, 1.0));
     }

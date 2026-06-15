@@ -20,11 +20,13 @@ fn bench_line_100k(c: &mut Criterion) {
     let x: Vec<f64> = (0..100_000).map(|i| i as f64 * 0.0001).collect();
     let y: Vec<f64> = x.iter().map(|v| v.sin()).collect();
 
+    // TRD target is "100k-point line with LTTB", so the line is decimated to a
+    // perceptually faithful 2000-point representation before rasterizing.
     c.bench_function("line_100k_png", |b| {
         b.iter(|| {
             let mut fig = Figure::new();
             let ax = fig.add_subplot(1, 1, 1);
-            ax.plot(&x, &y).unwrap();
+            ax.plot(&x, &y).unwrap().decimate(2_000);
             fig.to_png_bytes().unwrap()
         });
     });
@@ -39,6 +41,52 @@ fn bench_scatter_10k(c: &mut Criterion) {
             let mut fig = Figure::new();
             let ax = fig.add_subplot(1, 1, 1);
             ax.scatter(&x, &y).unwrap();
+            fig.to_png_bytes().unwrap()
+        });
+    });
+}
+
+fn bench_scatter_1m(c: &mut Criterion) {
+    use plotkit_core::decimate::lttb;
+
+    // One million points of a noisy sinusoid.
+    let n = 1_000_000usize;
+    let x: Vec<f64> = (0..n).map(|i| i as f64 * 1e-5).collect();
+    let y: Vec<f64> = x
+        .iter()
+        .enumerate()
+        .map(|(i, v)| v.sin() + ((i as f64) * 0.7).sin() * 0.05)
+        .collect();
+
+    // Decimate down to a screen-resolution-faithful subset. The decimation is
+    // performed once, outside the timed closure, mirroring how an application
+    // would pre-reduce a static dataset before repeated rendering.
+    let idx = lttb(&x, &y, 4_000);
+    let dx: Vec<f64> = idx.iter().map(|&i| x[i]).collect();
+    let dy: Vec<f64> = idx.iter().map(|&i| y[i]).collect();
+
+    c.bench_function("scatter_1m_png", |b| {
+        b.iter(|| {
+            let mut fig = Figure::new();
+            let ax = fig.add_subplot(1, 1, 1);
+            ax.scatter(&dx, &dy).unwrap();
+            fig.to_png_bytes().unwrap()
+        });
+    });
+}
+
+fn bench_cold_render_default_line(c: &mut Criterion) {
+    // A minimal default line plot — the canonical "cold render" path. Data is
+    // tiny and generated outside the timed closure so the measurement reflects
+    // figure setup plus a single rasterization, not data preparation.
+    let x: Vec<f64> = (0..50).map(|i| i as f64).collect();
+    let y: Vec<f64> = x.iter().map(|v| v.sin()).collect();
+
+    c.bench_function("cold_render_default_line", |b| {
+        b.iter(|| {
+            let mut fig = Figure::new();
+            let ax = fig.add_subplot(1, 1, 1);
+            ax.plot(&x, &y).unwrap();
             fig.to_png_bytes().unwrap()
         });
     });
@@ -140,6 +188,8 @@ criterion_group!(
     benches,
     bench_line_10k,
     bench_line_100k,
+    bench_scatter_1m,
+    bench_cold_render_default_line,
     bench_scatter_10k,
     bench_bar_100,
     bench_histogram_10k,

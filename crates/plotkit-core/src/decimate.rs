@@ -23,6 +23,77 @@ pub enum DecimateMethod {
     MinMax,
 }
 
+/// Default point count above which auto-decimation activates.
+///
+/// Rationale: a typical figure is well under ~2000 device pixels wide, so a
+/// line or scatter with more than a few thousand points cannot reveal extra
+/// detail — adjacent points collapse onto the same pixel column. We pick
+/// `5000` as a conservative ceiling that sits comfortably above the pixel
+/// budget of even very large figures while still cutting the work for the
+/// truly large series (100k–10M points) where rendering cost dominates.
+/// Series at or below this size render every point, so small/medium plots are
+/// never altered. The value is intentionally a round, documented constant so
+/// output remains deterministic and reproducible across runs.
+pub const DEFAULT_DECIMATE_THRESHOLD: usize = 5000;
+
+/// How decimation is resolved for a series at render time.
+///
+/// This drives the index-selection logic in the draw path:
+///
+/// - [`DecimateMode::Auto`] (the default) — decimate with LTTB to
+///   [`DEFAULT_DECIMATE_THRESHOLD`] points only when the series is larger than
+///   that threshold; otherwise every point is drawn. This gives large series a
+///   fast, faithful render with zero configuration while leaving small series
+///   untouched.
+/// - [`DecimateMode::Off`] — never decimate; always draw every point. Use this
+///   when exact point-for-point rendering is required.
+/// - [`DecimateMode::Explicit`] — decimate to the given point count using the
+///   given method whenever the series exceeds that count. Set via the
+///   `.decimate(n)` / `.decimate_with(n, method)` builder methods.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum DecimateMode {
+    /// Auto-decimate large series to [`DEFAULT_DECIMATE_THRESHOLD`] via LTTB.
+    #[default]
+    Auto,
+    /// Disable decimation entirely; draw every point.
+    Off,
+    /// Decimate to `usize` points using the chosen [`DecimateMethod`].
+    Explicit(usize, DecimateMethod),
+}
+
+impl DecimateMode {
+    /// Resolves the set of point indices to draw for a series of length `n`,
+    /// given x/y data, according to this mode.
+    ///
+    /// The returned indices always include the first and last (finite) points
+    /// when decimation is applied. When no decimation is needed, the full
+    /// `0..n` range is returned. This function is pure and deterministic: the
+    /// same inputs always yield the same indices.
+    pub fn resolve_indices(self, x: &[f64], y: &[f64]) -> Vec<usize> {
+        let n = x.len();
+        match self {
+            DecimateMode::Off => (0..n).collect(),
+            DecimateMode::Auto => {
+                if n > DEFAULT_DECIMATE_THRESHOLD {
+                    lttb(x, y, DEFAULT_DECIMATE_THRESHOLD)
+                } else {
+                    (0..n).collect()
+                }
+            }
+            DecimateMode::Explicit(threshold, method) => {
+                if n > threshold {
+                    match method {
+                        DecimateMethod::Lttb => lttb(x, y, threshold),
+                        DecimateMethod::MinMax => minmax(x, y, threshold),
+                    }
+                } else {
+                    (0..n).collect()
+                }
+            }
+        }
+    }
+}
+
 /// Downsamples a series of (x, y) points to `threshold` points using the
 /// Largest Triangle Three Buckets algorithm.
 ///
@@ -548,5 +619,103 @@ mod tests {
         for w in indices.windows(2) {
             assert!(w[0] < w[1], "LTTB indices must be strictly increasing");
         }
+    }
+
+    // -- DecimateMode resolution -------------------------------------------
+
+    #[test]
+    fn mode_default_is_auto() {
+        assert_eq!(DecimateMode::default(), DecimateMode::Auto);
+    }
+
+    #[test]
+    fn mode_auto_decimates_above_threshold_to_default() {
+        let n = DEFAULT_DECIMATE_THRESHOLD + 1;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.01).sin()).collect();
+        let indices = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), DEFAULT_DECIMATE_THRESHOLD);
+        // Endpoints always preserved.
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
+        // Strictly increasing.
+        for w in indices.windows(2) {
+            assert!(w[0] < w[1]);
+        }
+    }
+
+    #[test]
+    fn mode_auto_is_noop_exactly_at_threshold() {
+        let n = DEFAULT_DECIMATE_THRESHOLD;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(indices, (0..n).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn mode_auto_is_noop_below_threshold() {
+        let n = 10;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(indices, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn mode_off_never_decimates() {
+        let n = DEFAULT_DECIMATE_THRESHOLD * 4;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices = DecimateMode::Off.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), n);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
+    }
+
+    #[test]
+    fn mode_explicit_lttb_uses_given_threshold() {
+        let n = 4000;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.05).sin()).collect();
+        let indices =
+            DecimateMode::Explicit(250, DecimateMethod::Lttb).resolve_indices(&x, &y);
+        assert_eq!(indices.len(), 250);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
+    }
+
+    #[test]
+    fn mode_explicit_minmax_uses_given_method() {
+        let n = 4000;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.05).sin()).collect();
+        let indices =
+            DecimateMode::Explicit(250, DecimateMethod::MinMax).resolve_indices(&x, &y);
+        assert!(indices.len() <= 250);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
+    }
+
+    #[test]
+    fn mode_explicit_is_noop_below_its_threshold() {
+        // Series of 100 with explicit threshold 5000 → no decimation.
+        let n = 100;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices =
+            DecimateMode::Explicit(5000, DecimateMethod::Lttb).resolve_indices(&x, &y);
+        assert_eq!(indices, (0..n).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn mode_resolve_is_deterministic() {
+        // Same input must yield identical indices across repeated calls.
+        let n = 20_000;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.003).sin() + (v * 0.07).cos()).collect();
+        let a = DecimateMode::Auto.resolve_indices(&x, &y);
+        let b = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(a, b);
     }
 }

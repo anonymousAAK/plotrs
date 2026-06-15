@@ -16,6 +16,7 @@
 
 use crate::artist::ScatterArtist;
 use crate::colormap::Colormap;
+use crate::decimate::{DecimateMethod, DecimateMode};
 use crate::primitives::Color;
 use crate::theme::Marker;
 
@@ -182,5 +183,152 @@ impl ScatterArtist {
     pub fn cmap(&mut self, cmap: Colormap) -> &mut Self {
         self.cmap = Some(cmap);
         self
+    }
+
+    /// Enables LTTB decimation with the given explicit point threshold.
+    ///
+    /// When the data series length exceeds `threshold`, the rendering pipeline
+    /// downsamples the points using the Largest Triangle Three Buckets
+    /// algorithm before drawing. Per-point styling (`colors`, `c`) stays
+    /// synchronized with the surviving points.
+    ///
+    /// This overrides the default [`DecimateMode::Auto`] behavior with an
+    /// explicit threshold. To disable decimation entirely, use
+    /// [`no_decimate`](Self::no_decimate).
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// ax.scatter(&x, &y)?.decimate(2000);
+    /// ```
+    pub fn decimate(&mut self, threshold: usize) -> &mut Self {
+        self.decimate = DecimateMode::Explicit(threshold, DecimateMethod::Lttb);
+        self
+    }
+
+    /// Enables decimation with a specific method and explicit point threshold.
+    ///
+    /// Available methods:
+    /// - [`DecimateMethod::Lttb`] — best visual fidelity (default)
+    /// - [`DecimateMethod::MinMax`] — fastest, preserves peaks/troughs
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// ax.scatter(&x, &y)?.decimate_with(2000, DecimateMethod::MinMax);
+    /// ```
+    pub fn decimate_with(&mut self, threshold: usize, method: DecimateMethod) -> &mut Self {
+        self.decimate = DecimateMode::Explicit(threshold, method);
+        self
+    }
+
+    /// Disables decimation entirely, drawing every point.
+    ///
+    /// By default large series are auto-decimated via [`DecimateMode::Auto`].
+    /// Call this when every marker must be rendered regardless of series size.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// ax.scatter(&x, &y)?.no_decimate();
+    /// ```
+    pub fn no_decimate(&mut self) -> &mut Self {
+        self.decimate = DecimateMode::Off;
+        self
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use crate::axes::Axes;
+    use crate::decimate::{DecimateMethod, DecimateMode, DEFAULT_DECIMATE_THRESHOLD};
+
+    fn make_axes() -> Axes {
+        Axes::new()
+    }
+
+    #[test]
+    fn scatter_defaults_to_auto_decimate() {
+        let mut ax = make_axes();
+        let artist = ax.scatter(&[0.0, 1.0, 2.0], &[0.0, 1.0, 2.0]).unwrap();
+        assert_eq!(artist.decimate, DecimateMode::Auto);
+    }
+
+    #[test]
+    fn scatter_decimate_sets_explicit_lttb() {
+        let mut ax = make_axes();
+        let artist = ax.scatter(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        artist.decimate(2000);
+        assert_eq!(
+            artist.decimate,
+            DecimateMode::Explicit(2000, DecimateMethod::Lttb)
+        );
+    }
+
+    #[test]
+    fn scatter_decimate_with_sets_explicit_method() {
+        let mut ax = make_axes();
+        let artist = ax.scatter(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        artist.decimate_with(750, DecimateMethod::MinMax);
+        assert_eq!(
+            artist.decimate,
+            DecimateMode::Explicit(750, DecimateMethod::MinMax)
+        );
+    }
+
+    #[test]
+    fn scatter_no_decimate_disables() {
+        let mut ax = make_axes();
+        let artist = ax.scatter(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        artist.no_decimate();
+        assert_eq!(artist.decimate, DecimateMode::Off);
+    }
+
+    #[test]
+    fn scatter_auto_kicks_in_above_threshold() {
+        let n = DEFAULT_DECIMATE_THRESHOLD + 2500;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.02).cos()).collect();
+        let indices = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), DEFAULT_DECIMATE_THRESHOLD);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
+    }
+
+    #[test]
+    fn scatter_auto_no_op_below_threshold() {
+        let n = 100;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices = DecimateMode::Auto.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), n);
+        assert_eq!(indices, (0..n).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn scatter_no_decimate_keeps_all_points() {
+        let n = DEFAULT_DECIMATE_THRESHOLD * 3;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y = x.clone();
+        let indices = DecimateMode::Off.resolve_indices(&x, &y);
+        assert_eq!(indices.len(), n);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
+    }
+
+    #[test]
+    fn scatter_explicit_minmax_overrides_auto() {
+        let n = 8000;
+        let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|v| (v * 0.03).sin()).collect();
+        let indices =
+            DecimateMode::Explicit(300, DecimateMethod::MinMax).resolve_indices(&x, &y);
+        assert!(indices.len() <= 300);
+        assert_eq!(*indices.first().unwrap(), 0);
+        assert_eq!(*indices.last().unwrap(), n - 1);
     }
 }

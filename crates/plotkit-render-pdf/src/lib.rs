@@ -42,6 +42,10 @@ pub struct PdfRenderer {
     layer_idx: PdfLayerIndex,
     /// Stack depth for save/restore graphics state (clip simulation).
     clip_depth: usize,
+    /// Reusable scratch buffer for accumulating the current sub-path's points
+    /// during path conversion. Cleared (not reallocated) per sub-path so the
+    /// hot path avoids repeatedly growing a fresh ring `Vec` from zero.
+    ring_scratch: Vec<(printpdf::Point, bool)>,
 }
 
 impl PdfRenderer {
@@ -62,6 +66,7 @@ impl PdfRenderer {
             page_idx,
             layer_idx,
             clip_depth: 0,
+            ring_scratch: Vec::new(),
         }
     }
 
@@ -95,33 +100,41 @@ impl PdfRenderer {
     /// convention: two consecutive `true` flags on adjacent points signal
     /// that the next three points form a cubic bezier curve.
     fn convert_path_to_rings(
-        &self,
+        &mut self,
         path: &Path,
         transform: Affine,
     ) -> Vec<Vec<(printpdf::Point, bool)>> {
         let mut rings: Vec<Vec<(printpdf::Point, bool)>> = Vec::new();
-        let mut current_ring: Vec<(printpdf::Point, bool)> = Vec::new();
+
+        // Reuse the scratch ring buffer across calls. `split_off(0)` hands the
+        // accumulated points to a freshly-owned ring (printpdf consumes rings)
+        // while leaving the scratch buffer's capacity intact for the next
+        // sub-path, so the per-sub-path growth-from-zero is eliminated.
+        self.ring_scratch.clear();
 
         for el in &path.elements {
             match *el {
                 PathEl::MoveTo(p) => {
-                    if !current_ring.is_empty() {
-                        rings.push(std::mem::take(&mut current_ring));
+                    if !self.ring_scratch.is_empty() {
+                        rings.push(self.ring_scratch.split_off(0));
                     }
                     let (mx, my) = self.transform_point(p, transform);
-                    current_ring.push((printpdf::Point::new(mx, my), false));
+                    self.ring_scratch.push((printpdf::Point::new(mx, my), false));
                 }
                 PathEl::LineTo(p) => {
                     let (lx, ly) = self.transform_point(p, transform);
-                    current_ring.push((printpdf::Point::new(lx, ly), false));
+                    self.ring_scratch.push((printpdf::Point::new(lx, ly), false));
                 }
                 PathEl::QuadTo(ctrl, end) => {
                     // Elevate quadratic to cubic bezier.
-                    if let Some(last) = current_ring.last_mut() {
+                    let last = self.ring_scratch.last().copied();
+                    if let Some(last) = last {
                         let p0x = last.0.x.0;
                         let p0y = last.0.y.0;
                         // Mark previous point to start bezier sequence.
-                        last.1 = true;
+                        if let Some(last_mut) = self.ring_scratch.last_mut() {
+                            last_mut.1 = true;
+                        }
 
                         let (cx_mm, cy_mm) = self.transform_point(ctrl, transform);
                         let (ex_mm, ey_mm) = self.transform_point(end, transform);
@@ -134,37 +147,38 @@ impl PdfRenderer {
                         let cp2x = ex_mm.0 + 2.0 / 3.0 * (cx_mm.0 - ex_mm.0);
                         let cp2y = ey_mm.0 + 2.0 / 3.0 * (cy_mm.0 - ey_mm.0);
 
-                        current_ring
+                        self.ring_scratch
                             .push((printpdf::Point::new(Mm(cp1x), Mm(cp1y)), true));
-                        current_ring
+                        self.ring_scratch
                             .push((printpdf::Point::new(Mm(cp2x), Mm(cp2y)), false));
-                        current_ring.push((printpdf::Point::new(ex_mm, ey_mm), false));
+                        self.ring_scratch
+                            .push((printpdf::Point::new(ex_mm, ey_mm), false));
                     }
                 }
                 PathEl::CurveTo(c1, c2, end) => {
                     // Mark previous point to start bezier sequence.
-                    if let Some(last) = current_ring.last_mut() {
+                    if let Some(last) = self.ring_scratch.last_mut() {
                         last.1 = true;
                     }
                     let (c1x, c1y) = self.transform_point(c1, transform);
                     let (c2x, c2y) = self.transform_point(c2, transform);
                     let (ex, ey) = self.transform_point(end, transform);
 
-                    current_ring.push((printpdf::Point::new(c1x, c1y), true));
-                    current_ring.push((printpdf::Point::new(c2x, c2y), false));
-                    current_ring.push((printpdf::Point::new(ex, ey), false));
+                    self.ring_scratch.push((printpdf::Point::new(c1x, c1y), true));
+                    self.ring_scratch.push((printpdf::Point::new(c2x, c2y), false));
+                    self.ring_scratch.push((printpdf::Point::new(ex, ey), false));
                 }
                 PathEl::ClosePath => {
                     // Close the sub-path by pushing the ring.
-                    if !current_ring.is_empty() {
-                        rings.push(std::mem::take(&mut current_ring));
+                    if !self.ring_scratch.is_empty() {
+                        rings.push(self.ring_scratch.split_off(0));
                     }
                 }
             }
         }
 
-        if !current_ring.is_empty() {
-            rings.push(current_ring);
+        if !self.ring_scratch.is_empty() {
+            rings.push(self.ring_scratch.split_off(0));
         }
 
         rings
