@@ -555,11 +555,11 @@ impl Theme {
     /// This is the dark variant. A light variant could be built by swapping
     /// base03/base0 roles.
     pub fn solarized() -> Self {
-        let base03 = Color::rgb(0x00, 0x2B, 0x36);  // dark background
-        let base02 = Color::rgb(0x07, 0x36, 0x42);  // highlight background
-        let base01 = Color::rgb(0x58, 0x6E, 0x75);  // secondary content
-        let base0 = Color::rgb(0x83, 0x94, 0x96);   // primary content
-        let base1 = Color::rgb(0x93, 0xA1, 0xA1);   // emphasized content
+        let base03 = Color::rgb(0x00, 0x2B, 0x36); // dark background
+        let base02 = Color::rgb(0x07, 0x36, 0x42); // highlight background
+        let base01 = Color::rgb(0x58, 0x6E, 0x75); // secondary content
+        let base0 = Color::rgb(0x83, 0x94, 0x96); // primary content
+        let base1 = Color::rgb(0x93, 0xA1, 0xA1); // emphasized content
 
         // Solarized accent colors.
         let cycle = vec![
@@ -1036,10 +1036,7 @@ mod tests {
             Theme::solarized(),
         ];
         for t in &themes {
-            assert!(
-                !t.color_cycle.is_empty(),
-                "color_cycle must not be empty"
-            );
+            assert!(!t.color_cycle.is_empty(), "color_cycle must not be empty");
         }
     }
 

@@ -87,8 +87,6 @@ pub enum Artist {
     Waterfall(WaterfallArtist),
 }
 
-
-
 impl Artist {
     /// Returns the legend label for this artist, if one has been set.
     ///
@@ -591,7 +589,6 @@ impl BoxPlotArtist {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // ErrorBarData
 // ---------------------------------------------------------------------------
@@ -1047,14 +1044,22 @@ impl HexbinArtist {
 
         for &v in &self.x {
             if v.is_finite() {
-                if v < xmin { xmin = v; }
-                if v > xmax { xmax = v; }
+                if v < xmin {
+                    xmin = v;
+                }
+                if v > xmax {
+                    xmax = v;
+                }
             }
         }
         for &v in &self.y {
             if v.is_finite() {
-                if v < ymin { ymin = v; }
-                if v > ymax { ymax = v; }
+                if v < ymin {
+                    ymin = v;
+                }
+                if v > ymax {
+                    ymax = v;
+                }
             }
         }
 
@@ -1213,7 +1218,7 @@ mod tests {
             alpha: 1.0,
             horizontal: false,
             bar_width: 0.8,
-           bottom: None,
+            bottom: None,
             offset: None,
         }
     }
@@ -1380,7 +1385,7 @@ mod tests {
             alpha: 1.0,
             horizontal: false,
             bar_width: 0.8,
-           bottom: None,
+            bottom: None,
             offset: None,
         };
         let (_, _, ymin, ymax) = a.data_bounds();
@@ -1398,7 +1403,7 @@ mod tests {
             alpha: 1.0,
             horizontal: false,
             bar_width: 0.8,
-           bottom: None,
+            bottom: None,
             offset: None,
         };
         let (xmin, xmax, ymin, ymax) = a.data_bounds();

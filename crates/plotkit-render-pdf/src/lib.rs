@@ -119,11 +119,13 @@ impl PdfRenderer {
                         rings.push(self.ring_scratch.split_off(0));
                     }
                     let (mx, my) = self.transform_point(p, transform);
-                    self.ring_scratch.push((printpdf::Point::new(mx, my), false));
+                    self.ring_scratch
+                        .push((printpdf::Point::new(mx, my), false));
                 }
                 PathEl::LineTo(p) => {
                     let (lx, ly) = self.transform_point(p, transform);
-                    self.ring_scratch.push((printpdf::Point::new(lx, ly), false));
+                    self.ring_scratch
+                        .push((printpdf::Point::new(lx, ly), false));
                 }
                 PathEl::QuadTo(ctrl, end) => {
                     // Elevate quadratic to cubic bezier.
@@ -164,9 +166,12 @@ impl PdfRenderer {
                     let (c2x, c2y) = self.transform_point(c2, transform);
                     let (ex, ey) = self.transform_point(end, transform);
 
-                    self.ring_scratch.push((printpdf::Point::new(c1x, c1y), true));
-                    self.ring_scratch.push((printpdf::Point::new(c2x, c2y), false));
-                    self.ring_scratch.push((printpdf::Point::new(ex, ey), false));
+                    self.ring_scratch
+                        .push((printpdf::Point::new(c1x, c1y), true));
+                    self.ring_scratch
+                        .push((printpdf::Point::new(c2x, c2y), false));
+                    self.ring_scratch
+                        .push((printpdf::Point::new(ex, ey), false));
                 }
                 PathEl::ClosePath => {
                     // Close the sub-path by pushing the ring.
@@ -204,9 +209,7 @@ impl PdfRenderer {
             FontWeight::Bold => BuiltinFont::HelveticaBold,
             FontWeight::Normal => BuiltinFont::Helvetica,
         };
-        self.doc
-            .add_builtin_font(font_name)
-            .expect("built-in font")
+        self.doc.add_builtin_font(font_name).expect("built-in font")
     }
 
     /// Converts a plotkit `DashPattern` to a printpdf `LineDashPattern`.
@@ -273,13 +276,7 @@ impl Renderer for PdfRenderer {
         layer.add_polygon(poly);
     }
 
-    fn stroke_path(
-        &mut self,
-        path: &Path,
-        paint: &Paint,
-        stroke: &Stroke,
-        transform: Affine,
-    ) {
+    fn stroke_path(&mut self, path: &Path, paint: &Paint, stroke: &Stroke, transform: Affine) {
         let rings = self.convert_path_to_rings(path, transform);
         if rings.is_empty() {
             return;
@@ -542,7 +539,12 @@ mod tests {
         let mut line = Path::new();
         line.move_to(10.0, 10.0);
         line.line_to(390.0, 390.0);
-        r.stroke_path(&line, &Paint::new(Color::TAB_RED), &Stroke::new(2.0), Affine::IDENTITY);
+        r.stroke_path(
+            &line,
+            &Paint::new(Color::TAB_RED),
+            &Stroke::new(2.0),
+            Affine::IDENTITY,
+        );
         let bytes = r.finalize();
         assert_eq!(&bytes[..5], b"%PDF-");
     }
@@ -554,7 +556,12 @@ mod tests {
 
         style.halign = HAlign::Left;
         style.valign = VAlign::Top;
-        r.draw_text("Top-Left", Point::new(150.0, 50.0), &style, Affine::IDENTITY);
+        r.draw_text(
+            "Top-Left",
+            Point::new(150.0, 50.0),
+            &style,
+            Affine::IDENTITY,
+        );
 
         style.halign = HAlign::Center;
         style.valign = VAlign::Middle;
@@ -562,7 +569,12 @@ mod tests {
 
         style.halign = HAlign::Right;
         style.valign = VAlign::Bottom;
-        r.draw_text("Bottom-Right", Point::new(150.0, 250.0), &style, Affine::IDENTITY);
+        r.draw_text(
+            "Bottom-Right",
+            Point::new(150.0, 250.0),
+            &style,
+            Affine::IDENTITY,
+        );
 
         let bytes = r.finalize();
         assert!(!bytes.is_empty());

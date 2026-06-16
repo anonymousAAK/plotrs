@@ -21,3 +21,5 @@ body = """
 
 [workspace]
 publish_timeout = "10min"
+# Enforce semantic-versioning compatibility on every release PR.
+semver_check = true

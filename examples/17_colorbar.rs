@@ -19,9 +19,7 @@ fn main() -> plotkit::Result<()> {
 
     let mut fig = Figure::with_size(700, 500);
     let ax = fig.add_subplot(1, 1, 1);
-    ax.heatmap(data)?
-        .colormap(Colormap::Viridis)
-        .colorbar(true);
+    ax.heatmap(data)?.colormap(Colormap::Viridis).colorbar(true);
     ax.set_title("Heatmap with Colorbar");
 
     fig.save("examples/output/17_colorbar.png")?;

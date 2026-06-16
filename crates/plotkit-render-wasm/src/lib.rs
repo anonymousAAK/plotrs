@@ -54,13 +54,7 @@ pub fn color_to_css(c: &Color) -> String {
     if c.a == 255 {
         format!("rgba({},{},{},1)", c.r, c.g, c.b)
     } else {
-        format!(
-            "rgba({},{},{},{:.4})",
-            c.r,
-            c.g,
-            c.b,
-            c.a as f64 / 255.0
-        )
+        format!("rgba({},{},{},{:.4})", c.r, c.g, c.b, c.a as f64 / 255.0)
     }
 }
 
@@ -88,10 +82,7 @@ pub fn build_font_string(style: &TextStyle) -> String {
         FontWeight::Normal => "",
         FontWeight::Bold => "bold ",
     };
-    let family = style
-        .family
-        .as_deref()
-        .unwrap_or("sans-serif");
+    let family = style.family.as_deref().unwrap_or("sans-serif");
     format!("{}{:.0}px {}", weight, style.size, family)
 }
 
@@ -270,9 +261,8 @@ mod wasm_impl {
                         self.ctx.quadratic_curve_to(cp.x, cp.y, end.x, end.y);
                     }
                     PathEl::CurveTo(cp1, cp2, end) => {
-                        self.ctx.bezier_curve_to(
-                            cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y,
-                        );
+                        self.ctx
+                            .bezier_curve_to(cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y);
                     }
                     PathEl::ClosePath => {
                         self.ctx.close_path();
@@ -333,13 +323,7 @@ mod wasm_impl {
             self.ctx.restore();
         }
 
-        fn stroke_path(
-            &mut self,
-            path: &Path,
-            paint: &Paint,
-            stroke: &Stroke,
-            transform: Affine,
-        ) {
+        fn stroke_path(&mut self, path: &Path, paint: &Paint, stroke: &Stroke, transform: Affine) {
             self.ctx.save();
             self.apply_transform(transform);
             self.configure_stroke(paint, stroke);
@@ -361,8 +345,7 @@ mod wasm_impl {
             self.ctx.set_fill_style_str(&color);
 
             self.ctx.set_text_align(halign_to_canvas(style.halign));
-            self.ctx
-                .set_text_baseline(valign_to_canvas(style.valign));
+            self.ctx.set_text_baseline(valign_to_canvas(style.valign));
 
             let _ = self.ctx.fill_text(text, pos.x, pos.y);
 
@@ -375,16 +358,13 @@ mod wasm_impl {
 
             // Create ImageData from raw RGBA pixels and draw it scaled into the
             // destination rectangle. We use a temporary canvas for proper scaling.
-            if let Ok(clamped) =
-                wasm_bindgen::Clamped(img.data.as_slice()).try_into()
-            {
-                if let Ok(image_data) =
-                    web_sys::ImageData::new_with_u8_clamped_array_and_sh(
-                        clamped,
-                        img.width,
-                        img.height,
-                    )
-                {
+            // The conversion is infallible (Err = Infallible) but kept as a
+            // fallible match for forward compatibility with web-sys signatures.
+            #[allow(irrefutable_let_patterns)]
+            if let Ok(clamped) = wasm_bindgen::Clamped(img.data.as_slice()).try_into() {
+                if let Ok(image_data) = web_sys::ImageData::new_with_u8_clamped_array_and_sh(
+                    clamped, img.width, img.height,
+                ) {
                     // Use createImageBitmap or putImageData with scaling.
                     // The simplest approach: put image data at origin, then
                     // use drawImage to scale. For proper scaling we create
@@ -396,19 +376,18 @@ mod wasm_impl {
                                     temp_canvas.unchecked_into();
                                 temp_canvas.set_width(img.width);
                                 temp_canvas.set_height(img.height);
-                                if let Ok(Some(temp_ctx)) =
-                                    temp_canvas.get_context("2d")
-                                {
+                                if let Ok(Some(temp_ctx)) = temp_canvas.get_context("2d") {
                                     let temp_ctx: CanvasRenderingContext2d =
                                         temp_ctx.unchecked_into();
                                     let _ = temp_ctx.put_image_data(&image_data, 0.0, 0.0);
-                                    let _ = self.ctx.draw_image_with_html_canvas_element_and_dw_and_dh(
-                                        &temp_canvas,
-                                        dst.x,
-                                        dst.y,
-                                        dst.width,
-                                        dst.height,
-                                    );
+                                    let _ =
+                                        self.ctx.draw_image_with_html_canvas_element_and_dw_and_dh(
+                                            &temp_canvas,
+                                            dst.x,
+                                            dst.y,
+                                            dst.width,
+                                            dst.height,
+                                        );
                                 }
                             }
                         }
@@ -456,6 +435,59 @@ mod wasm_impl {
             // rendering backends.
             Vec::new()
         }
+    }
+
+    /// Renders a built-in demo plot onto the given canvas. Called from JS as
+    /// `render_demo(canvas, kind)` where `kind` is one of `"line"`,
+    /// `"scatter"`, `"bar"`, or `"hist"`.
+    #[wasm_bindgen]
+    pub fn render_demo(canvas: web_sys::HtmlCanvasElement, kind: &str) -> Result<(), JsValue> {
+        use plotkit_core::figure::Figure;
+        use wasm_bindgen::JsCast;
+
+        let width = canvas.width();
+        let height = canvas.height();
+        let ctx = canvas
+            .get_context("2d")?
+            .ok_or_else(|| JsValue::from_str("canvas has no 2d context"))?
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
+
+        let mut fig = Figure::with_size(width, height);
+        let ax = fig.add_subplot(1, 1, 1);
+        let to_js = |e: plotkit_core::error::PlotError| JsValue::from_str(&e.to_string());
+        let xs: Vec<f64> = (0..200).map(|i| i as f64 * 0.05).collect();
+        match kind {
+            "scatter" => {
+                let ys: Vec<f64> = xs.iter().map(|v| v.sin()).collect();
+                ax.scatter(xs.clone(), ys).map_err(to_js)?;
+                ax.set_title("scatter demo");
+            }
+            "bar" => {
+                let cats = vec!["A".to_string(), "B".to_string(), "C".to_string()];
+                ax.bar(cats, vec![3.0, 7.0, 5.0]).map_err(to_js)?;
+                ax.set_title("bar demo");
+            }
+            "hist" => {
+                let data: Vec<f64> = (0..500)
+                    .map(|i| (i as f64 * 0.1).sin() + (i as f64 * 0.031).cos())
+                    .collect();
+                ax.hist(data, 30).map_err(to_js)?;
+                ax.set_title("histogram demo");
+            }
+            _ => {
+                let ys: Vec<f64> = xs.iter().map(|v| v.sin()).collect();
+                ax.plot(xs.clone(), ys).map_err(to_js)?.label("sin(x)");
+                ax.set_title("line demo");
+                ax.legend();
+            }
+        }
+        ax.set_xlabel("x");
+        ax.set_ylabel("y");
+        ax.grid(true);
+
+        let renderer = WasmRenderer::new(ctx, width, height);
+        let _ = fig.render_to(renderer);
+        Ok(())
     }
 }
 

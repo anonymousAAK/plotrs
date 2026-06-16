@@ -265,14 +265,20 @@ mod tests {
     #[test]
     fn silverman_bandwidth_single_value() {
         let bw = silverman_bandwidth(&[42.0]);
-        assert!((bw - 1.0).abs() < f64::EPSILON, "single value should return fallback bandwidth");
+        assert!(
+            (bw - 1.0).abs() < f64::EPSILON,
+            "single value should return fallback bandwidth"
+        );
     }
 
     #[test]
     fn silverman_bandwidth_identical_values() {
         let sorted = vec![5.0, 5.0, 5.0, 5.0, 5.0];
         let bw = silverman_bandwidth(&sorted);
-        assert!((bw - 1.0).abs() < f64::EPSILON, "identical values should return fallback bandwidth");
+        assert!(
+            (bw - 1.0).abs() < f64::EPSILON,
+            "identical values should return fallback bandwidth"
+        );
     }
 
     #[test]
@@ -341,10 +347,7 @@ mod tests {
     #[test]
     fn data_bounds_multiple_datasets() {
         let artist = ViolinArtist {
-            datasets: vec![
-                vec![1.0, 2.0, 3.0],
-                vec![10.0, 20.0, 30.0],
-            ],
+            datasets: vec![vec![1.0, 2.0, 3.0], vec![10.0, 20.0, 30.0]],
             positions: None,
             widths: 0.7,
             show_median: true,

@@ -19,8 +19,8 @@
 use crate::colormap::Colormap;
 use crate::primitives::*;
 use crate::renderer::Renderer;
-use crate::ticks;
 use crate::theme::Theme;
+use crate::ticks;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -173,12 +173,7 @@ pub fn draw_colorbar(
 }
 
 /// Draws a vertical colorbar (gradient runs bottom-to-top).
-fn draw_vertical(
-    renderer: &mut impl Renderer,
-    colorbar: &Colorbar,
-    rect: &Rect,
-    theme: &Theme,
-) {
+fn draw_vertical(renderer: &mut impl Renderer, colorbar: &Colorbar, rect: &Rect, theme: &Theme) {
     // Divide the rect: gradient on the left, ticks/label on the right.
     let gradient_width = (rect.width * GRADIENT_FRACTION).max(8.0);
     let gradient_rect = Rect::new(rect.x, rect.y, gradient_width, rect.height);
@@ -202,7 +197,12 @@ fn draw_vertical(
     let border_path = Path::rect(gradient_rect);
     let border_paint = Paint::new(theme.spine_color);
     let border_stroke = Stroke::new(theme.spine_width);
-    renderer.stroke_path(&border_path, &border_paint, &border_stroke, Affine::IDENTITY);
+    renderer.stroke_path(
+        &border_path,
+        &border_paint,
+        &border_stroke,
+        Affine::IDENTITY,
+    );
 
     // --- Generate ticks ---
     let tick_data = ticks::generate_ticks(
@@ -278,12 +278,7 @@ fn draw_vertical(
 }
 
 /// Draws a horizontal colorbar (gradient runs left-to-right).
-fn draw_horizontal(
-    renderer: &mut impl Renderer,
-    colorbar: &Colorbar,
-    rect: &Rect,
-    theme: &Theme,
-) {
+fn draw_horizontal(renderer: &mut impl Renderer, colorbar: &Colorbar, rect: &Rect, theme: &Theme) {
     // Divide the rect: gradient on top, ticks/label below.
     let gradient_height = (rect.height * GRADIENT_FRACTION).max(8.0);
     let gradient_rect = Rect::new(rect.x, rect.y, rect.width, gradient_height);
@@ -306,7 +301,12 @@ fn draw_horizontal(
     let border_path = Path::rect(gradient_rect);
     let border_paint = Paint::new(theme.spine_color);
     let border_stroke = Stroke::new(theme.spine_width);
-    renderer.stroke_path(&border_path, &border_paint, &border_stroke, Affine::IDENTITY);
+    renderer.stroke_path(
+        &border_path,
+        &border_paint,
+        &border_stroke,
+        Affine::IDENTITY,
+    );
 
     // --- Generate ticks ---
     let tick_data = ticks::generate_ticks(
@@ -400,8 +400,7 @@ mod tests {
 
     #[test]
     fn colorbar_with_label() {
-        let cb = Colorbar::new(Colormap::Plasma, 0.0, 100.0)
-            .label("Temperature");
+        let cb = Colorbar::new(Colormap::Plasma, 0.0, 100.0).label("Temperature");
         assert_eq!(cb.label.as_deref(), Some("Temperature"));
     }
 
@@ -414,29 +413,27 @@ mod tests {
 
     #[test]
     fn colorbar_vertical_orientation() {
-        let cb = Colorbar::new(Colormap::Viridis, 0.0, 1.0)
-            .orientation(ColorbarOrientation::Vertical);
+        let cb =
+            Colorbar::new(Colormap::Viridis, 0.0, 1.0).orientation(ColorbarOrientation::Vertical);
         assert_eq!(cb.orientation, ColorbarOrientation::Vertical);
     }
 
     #[test]
     fn colorbar_horizontal_orientation() {
-        let cb = Colorbar::new(Colormap::Viridis, 0.0, 1.0)
-            .orientation(ColorbarOrientation::Horizontal);
+        let cb =
+            Colorbar::new(Colormap::Viridis, 0.0, 1.0).orientation(ColorbarOrientation::Horizontal);
         assert_eq!(cb.orientation, ColorbarOrientation::Horizontal);
     }
 
     #[test]
     fn colorbar_custom_num_steps() {
-        let cb = Colorbar::new(Colormap::Inferno, -1.0, 1.0)
-            .num_steps(128);
+        let cb = Colorbar::new(Colormap::Inferno, -1.0, 1.0).num_steps(128);
         assert_eq!(cb.num_steps, 128);
     }
 
     #[test]
     fn colorbar_num_steps_clamped_to_min_2() {
-        let cb = Colorbar::new(Colormap::Inferno, 0.0, 1.0)
-            .num_steps(0);
+        let cb = Colorbar::new(Colormap::Inferno, 0.0, 1.0).num_steps(0);
         assert_eq!(cb.num_steps, 2);
     }
 

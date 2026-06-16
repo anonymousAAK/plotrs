@@ -143,12 +143,7 @@ fn measure_legend(
 ///
 /// All eleven `Loc` variants are handled explicitly. The box is inset from
 /// the plot area edges by [`EDGE_MARGIN`] pixels.
-fn position_legend(
-    loc: Loc,
-    plot_area: &Rect,
-    box_width: f64,
-    box_height: f64,
-) -> (f64, f64) {
+fn position_legend(loc: Loc, plot_area: &Rect, box_width: f64, box_height: f64) -> (f64, f64) {
     let left = plot_area.x + EDGE_MARGIN;
     let right = plot_area.right() - box_width - EDGE_MARGIN;
     let top = plot_area.y + EDGE_MARGIN;
@@ -264,12 +259,7 @@ pub fn draw_legend(
 }
 
 /// Draws the swatch (line or filled rectangle) for a single legend entry.
-fn draw_swatch(
-    renderer: &mut impl Renderer,
-    entry: &LegendEntry,
-    x: f64,
-    center_y: f64,
-) {
+fn draw_swatch(renderer: &mut impl Renderer, entry: &LegendEntry, x: f64, center_y: f64) {
     let paint = Paint::new(entry.color);
 
     match entry.swatch {
@@ -365,13 +355,7 @@ mod tests {
             self.stroke_count += 1;
         }
 
-        fn draw_text(
-            &mut self,
-            text: &str,
-            _pos: Point,
-            _style: &TextStyle,
-            _transform: Affine,
-        ) {
+        fn draw_text(&mut self, text: &str, _pos: Point, _style: &TextStyle, _transform: Affine) {
             self.text_count += 1;
             self.texts.push(text.to_string());
         }

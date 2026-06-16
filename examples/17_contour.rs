@@ -5,17 +5,15 @@ use plotkit::prelude::*;
 fn main() -> plotkit::Result<()> {
     // Create a 2D grid.
     let n = 50;
-    let x: Vec<f64> = (0..n).map(|i| -3.0 + 6.0 * i as f64 / (n - 1) as f64).collect();
+    let x: Vec<f64> = (0..n)
+        .map(|i| -3.0 + 6.0 * i as f64 / (n - 1) as f64)
+        .collect();
     let y: Vec<f64> = x.clone();
 
     // Compute z = exp(-(x^2 + y^2)) -- a 2D Gaussian.
     let z: Vec<Vec<f64>> = y
         .iter()
-        .map(|&yi| {
-            x.iter()
-                .map(|&xi| (-xi * xi - yi * yi).exp())
-                .collect()
-        })
+        .map(|&yi| x.iter().map(|&xi| (-xi * xi - yi * yi).exp()).collect())
         .collect();
 
     // --- Filled contour (contourf) ---

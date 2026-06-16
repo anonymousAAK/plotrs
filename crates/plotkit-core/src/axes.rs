@@ -431,12 +431,6 @@ impl Axes {
             density: false,
         };
 
-
-
-
-
-
-
         self.artists.push(Artist::Histogram(artist));
         match self.artists.last_mut().expect("just pushed") {
             Artist::Histogram(a) => Ok(a),
@@ -506,11 +500,7 @@ impl Axes {
     ///
     /// Returns [`PlotError::SeriesLengthMismatch`] or [`PlotError::EmptyData`]
     /// on invalid input.
-    pub fn step<X: IntoSeries, Y: IntoSeries>(
-        &mut self,
-        x: X,
-        y: Y,
-    ) -> Result<&mut StepArtist> {
+    pub fn step<X: IntoSeries, Y: IntoSeries>(&mut self, x: X, y: Y) -> Result<&mut StepArtist> {
         let xs = x.into_series();
         let ys = y.into_series();
         if xs.len() != ys.len() {
@@ -548,11 +538,7 @@ impl Axes {
     ///
     /// Returns [`PlotError::SeriesLengthMismatch`] or [`PlotError::EmptyData`]
     /// on invalid input.
-    pub fn stem<X: IntoSeries, Y: IntoSeries>(
-        &mut self,
-        x: X,
-        y: Y,
-    ) -> Result<&mut StemArtist> {
+    pub fn stem<X: IntoSeries, Y: IntoSeries>(&mut self, x: X, y: Y) -> Result<&mut StemArtist> {
         let xs = x.into_series();
         let ys = y.into_series();
         if xs.len() != ys.len() {
@@ -629,11 +615,7 @@ impl Axes {
     ///
     /// Returns [`PlotError::SeriesLengthMismatch`] or [`PlotError::EmptyData`]
     /// on invalid input.
-    pub fn errorbar<X: IntoSeries, Y: IntoSeries>(
-        &mut self,
-        x: X,
-        y: Y,
-    ) -> Result<ErrorBarArtist> {
+    pub fn errorbar<X: IntoSeries, Y: IntoSeries>(&mut self, x: X, y: Y) -> Result<ErrorBarArtist> {
         let xs = x.into_series();
         let ys = y.into_series();
         if xs.len() != ys.len() {
@@ -742,20 +724,22 @@ impl Axes {
 
 impl Axes {
     /// Sets the title displayed above the axes area.
+    ///
+    /// Supports `^`/`_` super/subscript markup — see [`crate::text`].
     pub fn set_title(&mut self, title: &str) -> &mut Self {
-        self.title = Some(title.to_string());
+        self.title = Some(crate::text::format_markup(title));
         self
     }
 
-    /// Sets the x-axis label.
+    /// Sets the x-axis label. Supports `^`/`_` markup — see [`crate::text`].
     pub fn set_xlabel(&mut self, label: &str) -> &mut Self {
-        self.xlabel = Some(label.to_string());
+        self.xlabel = Some(crate::text::format_markup(label));
         self
     }
 
-    /// Sets the y-axis label.
+    /// Sets the y-axis label. Supports `^`/`_` markup — see [`crate::text`].
     pub fn set_ylabel(&mut self, label: &str) -> &mut Self {
-        self.ylabel = Some(label.to_string());
+        self.ylabel = Some(crate::text::format_markup(label));
         self
     }
 
@@ -901,7 +885,7 @@ impl Axes {
     /// data without expanding the axis limits.
     pub fn text(&mut self, x: f64, y: f64, text: &str) -> &mut TextAnnotation {
         self.texts.push(TextAnnotation {
-            text: text.to_string(),
+            text: crate::text::format_markup(text),
             x,
             y,
             fontsize: None,
@@ -923,7 +907,7 @@ impl Axes {
     /// is drawn from `xytext` to `xy`. Annotations do **not** affect autoscale.
     pub fn annotate(&mut self, text: &str, xy: (f64, f64), xytext: (f64, f64)) -> &mut Annotation {
         self.annotations.push(Annotation {
-            text: text.to_string(),
+            text: crate::text::format_markup(text),
             xy,
             xytext,
             fontsize: None,
@@ -943,7 +927,12 @@ impl Axes {
 
 impl Axes {
     /// Adds a colorbar to this axes.
-    pub fn colorbar(&mut self, cmap: crate::colormap::Colormap, vmin: f64, vmax: f64) -> &mut Colorbar {
+    pub fn colorbar(
+        &mut self,
+        cmap: crate::colormap::Colormap,
+        vmin: f64,
+        vmax: f64,
+    ) -> &mut Colorbar {
         self.colorbar = Some(Colorbar::new(cmap, vmin, vmax));
         self.colorbar.as_mut().expect("just set")
     }
@@ -1052,7 +1041,12 @@ impl Axes {
         categories: C,
         series: &[(&str, Vec<f64>)],
     ) -> Result<()> {
-        let cat_labels: Vec<String> = categories.into_categories().labels.iter().map(|s| s.to_string()).collect();
+        let cat_labels: Vec<String> = categories
+            .into_categories()
+            .labels
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let n_series = series.len();
         if n_series == 0 {
             return Err(PlotError::EmptyData);
@@ -1330,11 +1324,17 @@ impl Axes {
 
         // Step 4: Draw axes background.
         let bg_path = Path::rect(plot_area);
-        renderer.fill_path(&bg_path, &Paint::new(theme.axes_background), Affine::IDENTITY);
+        renderer.fill_path(
+            &bg_path,
+            &Paint::new(theme.axes_background),
+            Affine::IDENTITY,
+        );
 
         // Step 5: Draw grid (behind data).
         if self.show_grid.unwrap_or(theme.show_grid) {
-            self.draw_grid(renderer, &plot_area, &xticks, &yticks, xmin, xmax, ymin, ymax, theme);
+            self.draw_grid(
+                renderer, &plot_area, &xticks, &yticks, xmin, xmax, ymin, ymax, theme,
+            );
         }
 
         // Step 6: Clip to plot area and draw each artist.
@@ -1361,9 +1361,13 @@ impl Axes {
         self.draw_spines(renderer, &plot_area, theme);
 
         // Step 8: Draw ticks and tick labels (including minor ticks).
-        self.draw_ticks(renderer, &plot_area, &xticks, &yticks, xmin, xmax, ymin, ymax, theme);
+        self.draw_ticks(
+            renderer, &plot_area, &xticks, &yticks, xmin, xmax, ymin, ymax, theme,
+        );
         if !x_minor.is_empty() || !y_minor.is_empty() {
-            self.draw_minor_ticks(renderer, &plot_area, &x_minor, &y_minor, xmin, xmax, ymin, ymax, theme);
+            self.draw_minor_ticks(
+                renderer, &plot_area, &x_minor, &y_minor, xmin, xmax, ymin, ymax, theme,
+            );
         }
 
         // Step 9: Draw axis labels and title.
@@ -1394,9 +1398,8 @@ impl Axes {
                     ));
                 }
                 Artist::Hexbin(a) if a.show_colorbar => {
-                    let result = crate::charts::hexbin::bin_hexagonal(
-                        &a.x, &a.y, a.gridsize, a.mincnt,
-                    );
+                    let result =
+                        crate::charts::hexbin::bin_hexagonal(&a.x, &a.y, a.gridsize, a.mincnt);
                     let vmin = result.min_count as f64;
                     let vmax = (result.max_count as f64).max(vmin + 1.0);
                     return Some(Colorbar::new(a.cmap, vmin, vmax));
@@ -1488,8 +1491,24 @@ impl Axes {
                     Artist::Heatmap(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Pie(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Violin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
-                    Artist::Contour(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
-                    Artist::Polar(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
+                    Artist::Contour(a) => (
+                        a.label.as_deref(),
+                        a.color,
+                        if a.filled {
+                            SwatchKind::Filled
+                        } else {
+                            SwatchKind::Line
+                        },
+                    ),
+                    Artist::Polar(a) => (
+                        a.label.as_deref(),
+                        a.color,
+                        if a.filled {
+                            SwatchKind::Filled
+                        } else {
+                            SwatchKind::Line
+                        },
+                    ),
                     Artist::Hexbin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Waterfall(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                 };
@@ -1677,12 +1696,28 @@ impl Axes {
 
         // Handle the case where there are no artists or no finite data.
         if !x_lo.is_finite() || !x_hi.is_finite() {
-            x_lo = if self.xscale.requires_positive() { 1.0 } else { 0.0 };
-            x_hi = if self.xscale.requires_positive() { 10.0 } else { 1.0 };
+            x_lo = if self.xscale.requires_positive() {
+                1.0
+            } else {
+                0.0
+            };
+            x_hi = if self.xscale.requires_positive() {
+                10.0
+            } else {
+                1.0
+            };
         }
         if !y_lo.is_finite() || !y_hi.is_finite() {
-            y_lo = if self.yscale.requires_positive() { 1.0 } else { 0.0 };
-            y_hi = if self.yscale.requires_positive() { 10.0 } else { 1.0 };
+            y_lo = if self.yscale.requires_positive() {
+                1.0
+            } else {
+                0.0
+            };
+            y_hi = if self.yscale.requires_positive() {
+                10.0
+            } else {
+                1.0
+            };
         }
 
         // For log scales, clamp the lower bound to a positive value.
@@ -1778,7 +1813,11 @@ impl Axes {
                 })
                 .collect()
         } else {
-            let (lo, hi) = if xmin <= xmax { (xmin, xmax) } else { (xmax, xmin) };
+            let (lo, hi) = if xmin <= xmax {
+                (xmin, xmax)
+            } else {
+                (xmax, xmin)
+            };
             ticks::generate_ticks(lo, hi, DEFAULT_TICK_COUNT, &self.xscale)
         }
     }
@@ -1800,7 +1839,11 @@ impl Axes {
                 })
                 .collect()
         } else {
-            let (lo, hi) = if ymin <= ymax { (ymin, ymax) } else { (ymax, ymin) };
+            let (lo, hi) = if ymin <= ymax {
+                (ymin, ymax)
+            } else {
+                (ymax, ymin)
+            };
             ticks::generate_ticks(lo, hi, DEFAULT_TICK_COUNT, &self.yscale)
         }
     }
@@ -1894,21 +1937,33 @@ impl Axes {
     ) {
         match artist {
             Artist::Line(a) => self.draw_line(renderer, a, plot_area, xmin, xmax, ymin, ymax),
-            Artist::Scatter(a) => self.draw_scatter(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
+            Artist::Scatter(a) => {
+                self.draw_scatter(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme)
+            }
             Artist::Bar(a) => self.draw_bar(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::Histogram(a) => self.draw_hist(renderer, a, plot_area, xmin, xmax, ymin, ymax),
-            Artist::FillBetween(a) => self.draw_fill_between(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::FillBetween(a) => {
+                self.draw_fill_between(renderer, a, plot_area, xmin, xmax, ymin, ymax)
+            }
             Artist::Step(a) => self.draw_step(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::Stem(a) => self.draw_stem(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::BoxPlot(a) => self.draw_boxplot(renderer, a, plot_area, xmin, xmax, ymin, ymax),
-            Artist::ErrorBar(a) => self.draw_errorbar(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::ErrorBar(a) => {
+                self.draw_errorbar(renderer, a, plot_area, xmin, xmax, ymin, ymax)
+            }
             Artist::Heatmap(a) => self.draw_heatmap(renderer, a, plot_area, xmin, xmax, ymin, ymax),
             Artist::Pie(a) => self.draw_pie(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
-            Artist::Violin(a) => self.draw_violin(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
+            Artist::Violin(a) => {
+                self.draw_violin(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme)
+            }
             Artist::Contour(a) => self.draw_contour(renderer, a, plot_area, xmin, xmax, ymin, ymax),
-            Artist::Polar(a) => self.draw_polar(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme),
+            Artist::Polar(a) => {
+                self.draw_polar(renderer, a, plot_area, xmin, xmax, ymin, ymax, theme)
+            }
             Artist::Hexbin(a) => self.draw_hexbin(renderer, a, plot_area, xmin, xmax, ymin, ymax),
-            Artist::Waterfall(a) => self.draw_waterfall(renderer, a, plot_area, xmin, xmax, ymin, ymax),
+            Artist::Waterfall(a) => {
+                self.draw_waterfall(renderer, a, plot_area, xmin, xmax, ymin, ymax)
+            }
         }
     }
 
@@ -1946,7 +2001,10 @@ impl Axes {
             artist.x.data[indices[0]],
             artist.y.data[indices[0]],
             plot_area,
-            xmin, xmax, ymin, ymax,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
         );
         path.move_to(first.x, first.y);
 
@@ -1955,7 +2013,10 @@ impl Axes {
                 artist.x.data[i],
                 artist.y.data[i],
                 plot_area,
-                xmin, xmax, ymin, ymax,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             path.line_to(pt.x, pt.y);
         }
@@ -2027,7 +2088,10 @@ impl Axes {
                 artist.x.data[i],
                 artist.y.data[i],
                 plot_area,
-                xmin, xmax, ymin, ymax,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
 
             // Resolve the paint for this point: c/cmap > colors > color.
@@ -2041,9 +2105,12 @@ impl Axes {
 
             let marker_path = match artist.marker {
                 Marker::Circle | Marker::Point => Path::circle(pt, radius),
-                Marker::Square => {
-                    Path::rect(Rect::new(pt.x - radius, pt.y - radius, radius * 2.0, radius * 2.0))
-                }
+                Marker::Square => Path::rect(Rect::new(
+                    pt.x - radius,
+                    pt.y - radius,
+                    radius * 2.0,
+                    radius * 2.0,
+                )),
                 Marker::Diamond => {
                     let mut p = Path::new();
                     p.move_to(pt.x, pt.y - radius);
@@ -2089,8 +2156,8 @@ impl Axes {
                     let mut p = Path::new();
                     let inner = radius * 0.382;
                     for j in 0..10 {
-                        let angle = std::f64::consts::FRAC_PI_2
-                            + j as f64 * std::f64::consts::PI / 5.0;
+                        let angle =
+                            std::f64::consts::FRAC_PI_2 + j as f64 * std::f64::consts::PI / 5.0;
                         let r = if j % 2 == 0 { radius } else { inner };
                         let sx = pt.x + r * angle.cos();
                         let sy = pt.y - r * angle.sin();
@@ -2139,7 +2206,11 @@ impl Axes {
                 };
                 let value = artist.heights.data[i];
                 let base = if let Some(ref bot) = artist.bottom {
-                    if i < bot.len() { bot[i] } else { 0.0 }
+                    if i < bot.len() {
+                        bot[i]
+                    } else {
+                        0.0
+                    }
                 } else {
                     0.0
                 };
@@ -2147,8 +2218,24 @@ impl Axes {
                 let left_val = base.min(base + value);
                 let right_val = base.max(base + value);
 
-                let p_left = self.data_to_pixel(left_val, cat_center - bar_half, plot_area, xmin, xmax, ymin, ymax);
-                let p_right = self.data_to_pixel(right_val, cat_center + bar_half, plot_area, xmin, xmax, ymin, ymax);
+                let p_left = self.data_to_pixel(
+                    left_val,
+                    cat_center - bar_half,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
+                );
+                let p_right = self.data_to_pixel(
+                    right_val,
+                    cat_center + bar_half,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
+                );
 
                 let rect = Rect::from_points(p_left, p_right);
                 let bar_path = Path::rect(rect);
@@ -2169,7 +2256,11 @@ impl Axes {
                 };
                 let value = artist.heights.data[i];
                 let base = if let Some(ref bot) = artist.bottom {
-                    if i < bot.len() { bot[i] } else { 0.0 }
+                    if i < bot.len() {
+                        bot[i]
+                    } else {
+                        0.0
+                    }
                 } else {
                     0.0
                 };
@@ -2177,8 +2268,24 @@ impl Axes {
                 let bottom_val = base.min(base + value);
                 let top_val = base.max(base + value);
 
-                let p_bl = self.data_to_pixel(cat_center - bar_half, bottom_val, plot_area, xmin, xmax, ymin, ymax);
-                let p_tr = self.data_to_pixel(cat_center + bar_half, top_val, plot_area, xmin, xmax, ymin, ymax);
+                let p_bl = self.data_to_pixel(
+                    cat_center - bar_half,
+                    bottom_val,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
+                );
+                let p_tr = self.data_to_pixel(
+                    cat_center + bar_half,
+                    top_val,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
+                );
 
                 let rect = Rect::from_points(p_bl, p_tr);
                 let bar_path = Path::rect(rect);
@@ -2247,7 +2354,10 @@ impl Axes {
             artist.x.data[0],
             artist.y1.data[0],
             plot_area,
-            xmin, xmax, ymin, ymax,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
         );
         path.move_to(first.x, first.y);
         for i in 1..n {
@@ -2255,7 +2365,10 @@ impl Axes {
                 artist.x.data[i],
                 artist.y1.data[i],
                 plot_area,
-                xmin, xmax, ymin, ymax,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             path.line_to(pt.x, pt.y);
         }
@@ -2266,7 +2379,10 @@ impl Axes {
                 artist.x.data[i],
                 artist.y2.data[i],
                 plot_area,
-                xmin, xmax, ymin, ymax,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             path.line_to(pt.x, pt.y);
         }
@@ -2277,18 +2393,12 @@ impl Axes {
         renderer.fill_path(&path, &paint, Affine::IDENTITY);
     }
 
-
     // -----------------------------------------------------------------------
     // Step 7: Spines
     // -----------------------------------------------------------------------
 
     /// Draws the axis spines (border lines around the plot area).
-    fn draw_spines(
-        &self,
-        renderer: &mut impl Renderer,
-        plot_area: &Rect,
-        theme: &Theme,
-    ) {
+    fn draw_spines(&self, renderer: &mut impl Renderer, plot_area: &Rect, theme: &Theme) {
         let paint = Paint::new(theme.spine_color);
         let stroke = Stroke::new(theme.spine_width);
 
@@ -2398,12 +2508,7 @@ impl Axes {
             } else {
                 Affine::IDENTITY
             };
-            renderer.draw_text(
-                &tick.label,
-                label_pos,
-                &x_label_style,
-                transform,
-            );
+            renderer.draw_text(&tick.label, label_pos, &x_label_style, transform);
         }
 
         // --- Y-axis ticks (left) ---
@@ -2451,12 +2556,7 @@ impl Axes {
             } else {
                 Affine::IDENTITY
             };
-            renderer.draw_text(
-                &tick.label,
-                label_pos,
-                &y_label_style,
-                transform,
-            );
+            renderer.draw_text(&tick.label, label_pos, &y_label_style, transform);
         }
     }
 
@@ -2565,7 +2665,11 @@ impl Axes {
             tp.line_to(x_end, y);
             renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
 
-            let label_x = if outward { x_base + tick_len + 3.0 } else { x_base + 3.0 };
+            let label_x = if outward {
+                x_base + tick_len + 3.0
+            } else {
+                x_base + 3.0
+            };
             let label_pos = Point::new(label_x, y);
             let transform = if self.ytick_rotation.abs() > 0.01 {
                 let rotate = Affine::rotate(y_rot_rad);
@@ -2626,7 +2730,11 @@ impl Axes {
             color: theme.text_color,
             weight: FontWeight::Normal,
             family: theme.font_family.clone(),
-            halign: if self.xtick_rotation.abs() > 1.0 { HAlign::Left } else { HAlign::Center },
+            halign: if self.xtick_rotation.abs() > 1.0 {
+                HAlign::Left
+            } else {
+                HAlign::Center
+            },
             valign: VAlign::Bottom,
         };
 
@@ -2649,7 +2757,11 @@ impl Axes {
             tp.line_to(x, y_end);
             renderer.stroke_path(&tp, &tick_paint, &tick_stroke, Affine::IDENTITY);
 
-            let label_y = if outward { y_base - tick_len - 2.0 } else { y_base - 2.0 };
+            let label_y = if outward {
+                y_base - tick_len - 2.0
+            } else {
+                y_base - 2.0
+            };
             let label_pos = Point::new(x, label_y);
             let transform = if self.xtick_rotation.abs() > 0.01 {
                 let rotate = Affine::rotate(x_rot_rad);
@@ -2664,12 +2776,7 @@ impl Axes {
     }
 
     /// Draws the x-axis label on the top side.
-    fn draw_xlabel_top(
-        &self,
-        renderer: &mut impl Renderer,
-        plot_area: &Rect,
-        theme: &Theme,
-    ) {
+    fn draw_xlabel_top(&self, renderer: &mut impl Renderer, plot_area: &Rect, theme: &Theme) {
         if let Some(xlabel) = &self.xlabel {
             let style = TextStyle {
                 size: theme.axis_label_size,
@@ -2753,7 +2860,6 @@ impl Axes {
     // Step 10: Legend
     // -----------------------------------------------------------------------
 
-
     /// Draws a box-and-whisker plot: box from Q1 to Q3, median line, whiskers,
     /// caps, and optional outlier dots.
     fn draw_boxplot(
@@ -2808,7 +2914,8 @@ impl Axes {
             renderer.stroke_path(&median_path, &paint, &thick, Affine::IDENTITY);
 
             // --- Lower whisker ---
-            let wl_bottom = self.data_to_pixel(cx, stats.whisker_low, plot_area, xmin, xmax, ymin, ymax);
+            let wl_bottom =
+                self.data_to_pixel(cx, stats.whisker_low, plot_area, xmin, xmax, ymin, ymax);
             let wl_top = self.data_to_pixel(cx, stats.q1, plot_area, xmin, xmax, ymin, ymax);
             let mut wl_path = Path::new();
             wl_path.move_to(wl_top.x, wl_top.y);
@@ -2816,8 +2923,24 @@ impl Axes {
             renderer.stroke_path(&wl_path, &paint, &thin, Affine::IDENTITY);
 
             // Lower cap
-            let cap_left = self.data_to_pixel(cx - half * 0.5, stats.whisker_low, plot_area, xmin, xmax, ymin, ymax);
-            let cap_right = self.data_to_pixel(cx + half * 0.5, stats.whisker_low, plot_area, xmin, xmax, ymin, ymax);
+            let cap_left = self.data_to_pixel(
+                cx - half * 0.5,
+                stats.whisker_low,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
+            );
+            let cap_right = self.data_to_pixel(
+                cx + half * 0.5,
+                stats.whisker_low,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
+            );
             let mut cap_path = Path::new();
             cap_path.move_to(cap_left.x, cap_left.y);
             cap_path.line_to(cap_right.x, cap_right.y);
@@ -2825,15 +2948,32 @@ impl Axes {
 
             // --- Upper whisker ---
             let wu_bottom = self.data_to_pixel(cx, stats.q3, plot_area, xmin, xmax, ymin, ymax);
-            let wu_top = self.data_to_pixel(cx, stats.whisker_high, plot_area, xmin, xmax, ymin, ymax);
+            let wu_top =
+                self.data_to_pixel(cx, stats.whisker_high, plot_area, xmin, xmax, ymin, ymax);
             let mut wu_path = Path::new();
             wu_path.move_to(wu_bottom.x, wu_bottom.y);
             wu_path.line_to(wu_top.x, wu_top.y);
             renderer.stroke_path(&wu_path, &paint, &thin, Affine::IDENTITY);
 
             // Upper cap
-            let ucap_left = self.data_to_pixel(cx - half * 0.5, stats.whisker_high, plot_area, xmin, xmax, ymin, ymax);
-            let ucap_right = self.data_to_pixel(cx + half * 0.5, stats.whisker_high, plot_area, xmin, xmax, ymin, ymax);
+            let ucap_left = self.data_to_pixel(
+                cx - half * 0.5,
+                stats.whisker_high,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
+            );
+            let ucap_right = self.data_to_pixel(
+                cx + half * 0.5,
+                stats.whisker_high,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
+            );
             let mut ucap_path = Path::new();
             ucap_path.move_to(ucap_left.x, ucap_left.y);
             ucap_path.line_to(ucap_right.x, ucap_right.y);
@@ -2883,19 +3023,34 @@ impl Axes {
 
         let mut path = Path::new();
         let first = self.data_to_pixel(
-            artist.x.data[0], artist.y.data[0],
-            plot_area, xmin, xmax, ymin, ymax,
+            artist.x.data[0],
+            artist.y.data[0],
+            plot_area,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
         );
         path.move_to(first.x, first.y);
 
         for i in 1..artist.x.len() {
             let prev = self.data_to_pixel(
-                artist.x.data[i - 1], artist.y.data[i - 1],
-                plot_area, xmin, xmax, ymin, ymax,
+                artist.x.data[i - 1],
+                artist.y.data[i - 1],
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             let cur = self.data_to_pixel(
-                artist.x.data[i], artist.y.data[i],
-                plot_area, xmin, xmax, ymin, ymax,
+                artist.x.data[i],
+                artist.y.data[i],
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             match artist.where_step {
                 StepWhere::Pre => {
@@ -2939,12 +3094,22 @@ impl Axes {
 
         // Draw baseline.
         let bl_left = self.data_to_pixel(
-            artist.x.data[0], artist.baseline,
-            plot_area, xmin, xmax, ymin, ymax,
+            artist.x.data[0],
+            artist.baseline,
+            plot_area,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
         );
         let bl_right = self.data_to_pixel(
-            *artist.x.data.last().unwrap(), artist.baseline,
-            plot_area, xmin, xmax, ymin, ymax,
+            *artist.x.data.last().unwrap(),
+            artist.baseline,
+            plot_area,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
         );
         let mut bl_path = Path::new();
         bl_path.move_to(bl_left.x, bl_left.y);
@@ -2956,12 +3121,22 @@ impl Axes {
         // Draw stems and markers.
         for i in 0..artist.x.len() {
             let base = self.data_to_pixel(
-                artist.x.data[i], artist.baseline,
-                plot_area, xmin, xmax, ymin, ymax,
+                artist.x.data[i],
+                artist.baseline,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             let tip = self.data_to_pixel(
-                artist.x.data[i], artist.y.data[i],
-                plot_area, xmin, xmax, ymin, ymax,
+                artist.x.data[i],
+                artist.y.data[i],
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             let mut stem_path = Path::new();
             stem_path.move_to(base.x, base.y);
@@ -2994,14 +3169,24 @@ impl Axes {
         // Draw center connecting line.
         let mut line_path = Path::new();
         let first = self.data_to_pixel(
-            artist.x.data[0], artist.y.data[0],
-            plot_area, xmin, xmax, ymin, ymax,
+            artist.x.data[0],
+            artist.y.data[0],
+            plot_area,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
         );
         line_path.move_to(first.x, first.y);
         for i in 1..artist.x.len() {
             let pt = self.data_to_pixel(
-                artist.x.data[i], artist.y.data[i],
-                plot_area, xmin, xmax, ymin, ymax,
+                artist.x.data[i],
+                artist.y.data[i],
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
             line_path.line_to(pt.x, pt.y);
         }
@@ -3118,13 +3303,16 @@ impl Axes {
                 let cell_color = artist.cmap.map_value(val, vmin, vmax);
 
                 // Cell rectangle in data space: col..col+1 on x, row..row+1 on y.
-                let p_bl = self.data_to_pixel(
-                    col as f64, row as f64,
-                    plot_area, xmin, xmax, ymin, ymax,
-                );
+                let p_bl =
+                    self.data_to_pixel(col as f64, row as f64, plot_area, xmin, xmax, ymin, ymax);
                 let p_tr = self.data_to_pixel(
-                    (col + 1) as f64, (row + 1) as f64,
-                    plot_area, xmin, xmax, ymin, ymax,
+                    (col + 1) as f64,
+                    (row + 1) as f64,
+                    plot_area,
+                    xmin,
+                    xmax,
+                    ymin,
+                    ymax,
                 );
                 let rect = Rect::from_points(p_bl, p_tr);
                 let cell_path = Path::rect(rect);
@@ -3135,12 +3323,7 @@ impl Axes {
                     let cx = (p_bl.x + p_tr.x) / 2.0;
                     let cy = (p_bl.y + p_tr.y) / 2.0;
                     let label = format!("{val:.1}");
-                    renderer.draw_text(
-                        &label,
-                        Point::new(cx, cy),
-                        &text_style,
-                        Affine::IDENTITY,
-                    );
+                    renderer.draw_text(&label, Point::new(cx, cy), &text_style, Affine::IDENTITY);
                 }
             }
         }
@@ -3231,17 +3414,19 @@ impl Axes {
             let lx = center.x + (max_radius_px + label_offset) * angle.cos();
             let ly = center.y - (max_radius_px + label_offset) * angle.sin();
             let label_text = format!("{}°", deg);
-            renderer.draw_text(&label_text, Point::new(lx, ly), &angle_label_style, Affine::IDENTITY);
+            renderer.draw_text(
+                &label_text,
+                Point::new(lx, ly),
+                &angle_label_style,
+                Affine::IDENTITY,
+            );
         }
 
         // --- Draw the data path ---
         // Helper: convert (r, theta) -> pixel coordinates
         let to_px = |r: f64, theta: f64| -> Point {
             let px_r = r / r_max * max_radius_px;
-            Point::new(
-                center.x + px_r * theta.cos(),
-                center.y - px_r * theta.sin(),
-            )
+            Point::new(center.x + px_r * theta.cos(), center.y - px_r * theta.sin())
         };
 
         let mut path = Path::new();
@@ -3275,7 +3460,11 @@ impl Axes {
             let fill_paint = Paint::new(color);
             renderer.fill_path(&path, &fill_paint, Affine::IDENTITY);
             // Draw the outline
-            let stroke_paint = Paint::new(artist.color.with_alpha(((artist.alpha.min(1.0) * 0.8 + 0.2) * 255.0) as u8));
+            let stroke_paint = Paint::new(
+                artist
+                    .color
+                    .with_alpha(((artist.alpha.min(1.0) * 0.8 + 0.2) * 255.0) as u8),
+            );
             let stroke = Stroke::new(artist.linewidth);
             renderer.stroke_path(&path, &stroke_paint, &stroke, Affine::IDENTITY);
         } else {
@@ -3349,11 +3538,16 @@ impl Axes {
                         let mut p = Path::new();
                         let inner = marker_radius * 0.382;
                         for j in 0..10 {
-                            let a = std::f64::consts::FRAC_PI_2 + j as f64 * std::f64::consts::PI / 5.0;
+                            let a =
+                                std::f64::consts::FRAC_PI_2 + j as f64 * std::f64::consts::PI / 5.0;
                             let r = if j % 2 == 0 { marker_radius } else { inner };
                             let sx = pt.x + r * a.cos();
                             let sy = pt.y - r * a.sin();
-                            if j == 0 { p.move_to(sx, sy); } else { p.line_to(sx, sy); }
+                            if j == 0 {
+                                p.move_to(sx, sy);
+                            } else {
+                                p.line_to(sx, sy);
+                            }
                         }
                         p.close();
                         p
@@ -3376,7 +3570,7 @@ impl Axes {
         ymin: f64,
         ymax: f64,
     ) {
-        use crate::charts::hexbin::{bin_hexagonal, hexagon_vertices, hex_size_for_gridsize};
+        use crate::charts::hexbin::{bin_hexagonal, hex_size_for_gridsize, hexagon_vertices};
 
         let result = bin_hexagonal(&artist.x, &artist.y, artist.gridsize, artist.mincnt);
         if result.cells.is_empty() {
@@ -3506,15 +3700,8 @@ impl Axes {
                 } else {
                     bottom_val
                 };
-                let label_pos = self.data_to_pixel(
-                    cat_center,
-                    label_y,
-                    plot_area,
-                    xmin,
-                    xmax,
-                    ymin,
-                    ymax,
-                );
+                let label_pos =
+                    self.data_to_pixel(cat_center, label_y, plot_area, xmin, xmax, ymin, ymax);
 
                 let text_style = TextStyle {
                     size: 10.0,
@@ -3549,24 +3736,10 @@ impl Axes {
                 let right_edge = xmin + (i as f64 + 0.5) * cat_step + bar_half;
                 let left_edge = xmin + ((i + 1) as f64 + 0.5) * cat_step - bar_half;
 
-                let p_from = self.data_to_pixel(
-                    right_edge,
-                    connector_y,
-                    plot_area,
-                    xmin,
-                    xmax,
-                    ymin,
-                    ymax,
-                );
-                let p_to = self.data_to_pixel(
-                    left_edge,
-                    connector_y,
-                    plot_area,
-                    xmin,
-                    xmax,
-                    ymin,
-                    ymax,
-                );
+                let p_from =
+                    self.data_to_pixel(right_edge, connector_y, plot_area, xmin, xmax, ymin, ymax);
+                let p_to =
+                    self.data_to_pixel(left_edge, connector_y, plot_area, xmin, xmax, ymin, ymax);
 
                 let mut path = Path::new();
                 path.move_to(p_from.x, p_from.y);
@@ -3619,13 +3792,16 @@ impl Axes {
         // --- Annotation items (text + optional arrow) ---
         for ann in &self.annotations {
             let text_pt = self.data_to_pixel(
-                ann.xytext.0, ann.xytext.1,
-                plot_area, xmin, xmax, ymin, ymax,
+                ann.xytext.0,
+                ann.xytext.1,
+                plot_area,
+                xmin,
+                xmax,
+                ymin,
+                ymax,
             );
-            let target_pt = self.data_to_pixel(
-                ann.xy.0, ann.xy.1,
-                plot_area, xmin, xmax, ymin, ymax,
-            );
+            let target_pt =
+                self.data_to_pixel(ann.xy.0, ann.xy.1, plot_area, xmin, xmax, ymin, ymax);
 
             let size = ann.fontsize.unwrap_or(theme.axis_label_size);
             let color = ann.color.unwrap_or(theme.text_color);
@@ -3643,7 +3819,11 @@ impl Axes {
             if ann.arrowstyle != ArrowStyle::None {
                 let arrow_col = ann.arrow_color.unwrap_or(color);
                 self.draw_annotation_arrow(
-                    renderer, text_pt, target_pt, arrow_col, &ann.arrowstyle,
+                    renderer,
+                    text_pt,
+                    target_pt,
+                    arrow_col,
+                    &ann.arrowstyle,
                 );
             }
         }
@@ -3734,13 +3914,26 @@ impl Axes {
         }
 
         // Normalise sizes to fractions summing to 1.0.
-        let total: f64 = artist.sizes.iter().copied().filter(|v| v.is_finite() && *v > 0.0).sum();
+        let total: f64 = artist
+            .sizes
+            .iter()
+            .copied()
+            .filter(|v| v.is_finite() && *v > 0.0)
+            .sum();
         if total <= 0.0 {
             return;
         }
-        let fractions: Vec<f64> = artist.sizes.iter().map(|&s| {
-            if s.is_finite() && s > 0.0 { s / total } else { 0.0 }
-        }).collect();
+        let fractions: Vec<f64> = artist
+            .sizes
+            .iter()
+            .map(|&s| {
+                if s.is_finite() && s > 0.0 {
+                    s / total
+                } else {
+                    0.0
+                }
+            })
+            .collect();
 
         // Center of the pie in data space is (0, 0).
         let center_px = self.data_to_pixel(0.0, 0.0, plot_area, xmin, xmax, ymin, ymax);
@@ -3787,9 +3980,11 @@ impl Axes {
             };
 
             // Compute explode offset in pixels.
-            let explode_frac = artist.explode.as_ref().map(|e| {
-                if i < e.len() { e[i] } else { 0.0 }
-            }).unwrap_or(0.0);
+            let explode_frac = artist
+                .explode
+                .as_ref()
+                .map(|e| if i < e.len() { e[i] } else { 0.0 })
+                .unwrap_or(0.0);
             let offset_x = explode_frac * radius_px * mid_angle.cos();
             let offset_y = explode_frac * radius_px * (-mid_angle.sin()); // y inverted
 
@@ -3825,7 +4020,7 @@ impl Axes {
                 // Tangent direction at start: perpendicular to radial.
                 let t0x = -seg_start.sin();
                 let t0y = -seg_start.cos(); // y inverted in pixel space
-                // Tangent direction at end: perpendicular to radial.
+                                            // Tangent direction at end: perpendicular to radial.
                 let t1x = -seg_end.sin();
                 let t1y = -seg_end.cos(); // y inverted in pixel space
 
@@ -3919,12 +4114,22 @@ impl Axes {
                         artist.cmap.map_value(avg, zmin, zmax)
                     };
                     let p_bl = self.data_to_pixel(
-                        artist.x[i], artist.y[j],
-                        plot_area, xmin, xmax, ymin, ymax,
+                        artist.x[i],
+                        artist.y[j],
+                        plot_area,
+                        xmin,
+                        xmax,
+                        ymin,
+                        ymax,
                     );
                     let p_tr = self.data_to_pixel(
-                        artist.x[i + 1], artist.y[j + 1],
-                        plot_area, xmin, xmax, ymin, ymax,
+                        artist.x[i + 1],
+                        artist.y[j + 1],
+                        plot_area,
+                        xmin,
+                        xmax,
+                        ymin,
+                        ymax,
                     );
                     let rect = Rect::from_points(p_bl, p_tr);
                     let cell_path = Path::rect(rect);
@@ -3984,7 +4189,9 @@ impl Axes {
             }
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-            let pos = artist.positions.as_ref()
+            let pos = artist
+                .positions
+                .as_ref()
                 .and_then(|p| p.get(di).copied())
                 .unwrap_or(di as f64 + 1.0);
 
@@ -4018,13 +4225,15 @@ impl Axes {
             path.move_to(fp.x, fp.y);
             for i in 1..n_eval {
                 let w = densities[i] / max_density * half_width;
-                let p = self.data_to_pixel(pos + w, eval_points[i], plot_area, xmin, xmax, ymin, ymax);
+                let p =
+                    self.data_to_pixel(pos + w, eval_points[i], plot_area, xmin, xmax, ymin, ymax);
                 path.line_to(p.x, p.y);
             }
             // Left side (bottom to top)
             for i in (0..n_eval).rev() {
                 let w = densities[i] / max_density * half_width;
-                let p = self.data_to_pixel(pos - w, eval_points[i], plot_area, xmin, xmax, ymin, ymax);
+                let p =
+                    self.data_to_pixel(pos - w, eval_points[i], plot_area, xmin, xmax, ymin, ymax);
                 path.line_to(p.x, p.y);
             }
             path.close();
@@ -4063,19 +4272,22 @@ impl Axes {
                     let mut qp = Path::new();
                     qp.move_to(p1.x, p1.y);
                     qp.line_to(p2.x, p2.y);
-                    let q_stroke = Stroke::new(1.0).with_dash(DashPattern { dashes: vec![4.0, 2.0], offset: 0.0 });
-                    renderer.stroke_path(&qp, &Paint::new(theme.text_color), &q_stroke, Affine::IDENTITY);
+                    let q_stroke = Stroke::new(1.0).with_dash(DashPattern {
+                        dashes: vec![4.0, 2.0],
+                        offset: 0.0,
+                    });
+                    renderer.stroke_path(
+                        &qp,
+                        &Paint::new(theme.text_color),
+                        &q_stroke,
+                        Affine::IDENTITY,
+                    );
                 }
             }
         }
     }
 
-    fn draw_legend(
-        &self,
-        renderer: &mut impl Renderer,
-        plot_area: &Rect,
-        theme: &Theme,
-    ) {
+    fn draw_legend(&self, renderer: &mut impl Renderer, plot_area: &Rect, theme: &Theme) {
         // Collect labeled artists into LegendEntry items, choosing the
         // appropriate swatch kind for each artist type.
         let entries: Vec<LegendEntry> = self
@@ -4095,12 +4307,32 @@ impl Axes {
                     Artist::Heatmap(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Pie(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Violin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
-                    Artist::Contour(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
-                    Artist::Polar(a) => (a.label.as_deref(), a.color, if a.filled { SwatchKind::Filled } else { SwatchKind::Line }),
+                    Artist::Contour(a) => (
+                        a.label.as_deref(),
+                        a.color,
+                        if a.filled {
+                            SwatchKind::Filled
+                        } else {
+                            SwatchKind::Line
+                        },
+                    ),
+                    Artist::Polar(a) => (
+                        a.label.as_deref(),
+                        a.color,
+                        if a.filled {
+                            SwatchKind::Filled
+                        } else {
+                            SwatchKind::Line
+                        },
+                    ),
                     Artist::Hexbin(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                     Artist::Waterfall(a) => (a.label.as_deref(), a.color, SwatchKind::Filled),
                 };
-                label.map(|l| LegendEntry { label: l.to_string(), color, swatch })
+                label.map(|l| LegendEntry {
+                    label: l.to_string(),
+                    color,
+                    swatch,
+                })
             })
             .collect();
 
@@ -4190,7 +4422,10 @@ mod tests {
         let result = ax.plot(vec![1.0, 2.0], vec![1.0]);
         assert!(matches!(
             result,
-            Err(PlotError::SeriesLengthMismatch { expected: 2, got: 1 })
+            Err(PlotError::SeriesLengthMismatch {
+                expected: 2,
+                got: 1
+            })
         ));
     }
 
@@ -4291,7 +4526,10 @@ mod tests {
     fn fill_between_length_mismatch() {
         let mut ax = Axes::new();
         let result = ax.fill_between(vec![1.0, 2.0], vec![1.0], vec![0.0, 0.0]);
-        assert!(matches!(result, Err(PlotError::SeriesLengthMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(PlotError::SeriesLengthMismatch { .. })
+        ));
     }
 
     #[test]
@@ -4399,7 +4637,10 @@ mod tests {
     fn step_length_mismatch() {
         let mut ax = Axes::new();
         let result = ax.step(vec![1.0, 2.0], vec![1.0]);
-        assert!(matches!(result, Err(PlotError::SeriesLengthMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(PlotError::SeriesLengthMismatch { .. })
+        ));
     }
 
     #[test]
@@ -4515,7 +4756,10 @@ mod tests {
     fn stem_length_mismatch() {
         let mut ax = Axes::new();
         let result = ax.stem(vec![1.0, 2.0], vec![1.0]);
-        assert!(matches!(result, Err(PlotError::SeriesLengthMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(PlotError::SeriesLengthMismatch { .. })
+        ));
     }
 
     #[test]
@@ -4572,7 +4816,9 @@ mod tests {
     #[test]
     fn stem_data_bounds_include_baseline() {
         let mut ax = Axes::new();
-        ax.stem(vec![1.0, 5.0], vec![2.0, 8.0]).unwrap().baseline(-5.0);
+        ax.stem(vec![1.0, 5.0], vec![2.0, 8.0])
+            .unwrap()
+            .baseline(-5.0);
         let (_xmin, _xmax, ymin, _ymax) = ax.compute_data_limits();
         assert!(ymin < -5.0);
     }
@@ -4607,7 +4853,9 @@ mod tests {
     #[test]
     fn stem_negative_baseline() {
         let mut ax = Axes::new();
-        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0]).unwrap().baseline(-3.0);
+        ax.stem(vec![1.0, 2.0], vec![1.0, 2.0])
+            .unwrap()
+            .baseline(-3.0);
         match &ax.artists[0] {
             Artist::Stem(a) => assert!((a.baseline - (-3.0)).abs() < 1e-12),
             _ => panic!("expected Stem"),
@@ -5052,21 +5300,39 @@ mod tests {
 
         // 1.0 maps to the left edge in [1, 1000] log range.
         let p = ax.data_to_pixel(1.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
-        assert!((p.x - 100.0).abs() < 1e-6, "log10(1)=0 should be left edge, got {}", p.x);
+        assert!(
+            (p.x - 100.0).abs() < 1e-6,
+            "log10(1)=0 should be left edge, got {}",
+            p.x
+        );
 
         // 1000 maps to the right edge.
         let p = ax.data_to_pixel(1000.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
-        assert!((p.x - 500.0).abs() < 1e-6, "log10(1000)=3 should be right edge, got {}", p.x);
+        assert!(
+            (p.x - 500.0).abs() < 1e-6,
+            "log10(1000)=3 should be right edge, got {}",
+            p.x
+        );
 
         // 10 is 1/3 of the way (log10(10)=1 out of 3 decades).
         let p = ax.data_to_pixel(10.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
         let expected_x = 100.0 + 400.0 / 3.0;
-        assert!((p.x - expected_x).abs() < 1e-6, "log10(10)=1/3 of range, expected {}, got {}", expected_x, p.x);
+        assert!(
+            (p.x - expected_x).abs() < 1e-6,
+            "log10(10)=1/3 of range, expected {}, got {}",
+            expected_x,
+            p.x
+        );
 
         // 100 is 2/3 of the way.
         let p = ax.data_to_pixel(100.0, 0.0, &plot_area, 1.0, 1000.0, 0.0, 10.0);
         let expected_x = 100.0 + 400.0 * 2.0 / 3.0;
-        assert!((p.x - expected_x).abs() < 1e-6, "log10(100)=2/3 of range, expected {}, got {}", expected_x, p.x);
+        assert!(
+            (p.x - expected_x).abs() < 1e-6,
+            "log10(100)=2/3 of range, expected {}, got {}",
+            expected_x,
+            p.x
+        );
     }
 
     #[test]
@@ -5079,7 +5345,11 @@ mod tests {
         let p = ax.data_to_pixel(0.0, 10.0, &plot_area, 0.0, 10.0, 1.0, 100.0);
         // ty = (log10(10) - log10(1)) / (log10(100) - log10(1)) = 1/2 = 0.5
         // pixel_y = 0 + (1 - 0.5) * 300 = 150
-        assert!((p.y - 150.0).abs() < 1e-6, "log10(10) should be vertical center, got {}", p.y);
+        assert!(
+            (p.y - 150.0).abs() < 1e-6,
+            "log10(10) should be vertical center, got {}",
+            p.y
+        );
     }
 
     #[test]
@@ -5087,7 +5357,8 @@ mod tests {
         let mut ax = Axes::new();
         ax.set_xscale(Scale::Log10);
         ax.set_yscale(Scale::Log10);
-        ax.plot(vec![0.1, 1.0, 10.0], vec![1.0, 10.0, 100.0]).unwrap();
+        ax.plot(vec![0.1, 1.0, 10.0], vec![1.0, 10.0, 100.0])
+            .unwrap();
         let (xmin, xmax, ymin, ymax) = ax.compute_data_limits();
         assert!(xmin > 0.0, "log x-min must be positive, got {}", xmin);
         assert!(xmax > xmin, "log x-max must be > x-min");
@@ -5102,7 +5373,11 @@ mod tests {
         ax.set_xscale(Scale::Log10);
         ax.plot(vec![0.0, 1.0, 10.0], vec![1.0, 2.0, 3.0]).unwrap();
         let (xmin, xmax, _ymin, _ymax) = ax.compute_data_limits();
-        assert!(xmin > 0.0, "log x-min should be clamped positive, got {}", xmin);
+        assert!(
+            xmin > 0.0,
+            "log x-min should be clamped positive, got {}",
+            xmin
+        );
         assert!(xmax > xmin);
     }
 
@@ -5114,7 +5389,11 @@ mod tests {
 
         // For a symmetric range [-100, 100], zero should be at the center.
         let p = ax.data_to_pixel(0.0, 0.0, &plot_area, -100.0, 100.0, 0.0, 1.0);
-        assert!((p.x - 200.0).abs() < 1e-6, "symlog(0) should be center for symmetric range, got {}", p.x);
+        assert!(
+            (p.x - 200.0).abs() < 1e-6,
+            "symlog(0) should be center for symmetric range, got {}",
+            p.x
+        );
     }
 
     #[test]

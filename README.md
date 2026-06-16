@@ -2,22 +2,26 @@
 
 # plotkit
 
-### Publication-quality plots in 3 lines of Rust
+### Publication-quality plots in three lines of Rust.
 
-[![Crates.io](https://img.shields.io/crates/v/plotkit.svg)](https://crates.io/crates/plotkit)
-[![docs.rs](https://docs.rs/plotkit/badge.svg)](https://docs.rs/plotkit)
-[![CI](https://github.com/anonymousAAK/plotrs/actions/workflows/ci.yml/badge.svg)](https://github.com/anonymousAAK/plotrs/actions)
-[![License](https://img.shields.io/crates/l/plotkit.svg)](https://github.com/anonymousAAK/plotrs)
+[![Crates.io](https://img.shields.io/crates/v/plotkit.svg?style=flat-square&logo=rust&color=E15759)](https://crates.io/crates/plotkit)
+[![docs.rs](https://img.shields.io/docsrs/plotkit?style=flat-square&logo=docs.rs)](https://docs.rs/plotkit)
+[![CI](https://img.shields.io/github/actions/workflow/status/anonymousAAK/plotrs/ci.yml?style=flat-square&logo=github&label=CI)](https://github.com/anonymousAAK/plotrs/actions)
+[![License](https://img.shields.io/crates/l/plotkit.svg?style=flat-square&color=4E79A7)](#license)
+[![MSRV](https://img.shields.io/badge/MSRV-1.75-blue?style=flat-square&logo=rust)](#installation)
+
+**[Documentation](https://docs.rs/plotkit)** · **[User Guide](docs/)** · **[Gallery](examples/)** · **[Benchmarks](BENCHMARKS.md)**
 
 </div>
 
 ---
 
-**Rust finally has a plotting library that looks as good as matplotlib — and it's faster.**
+Rust deserves charts that belong in a journal paper — without shelling out to Python,
+booting a browser, or hunting for a system font that exists on your laptop but not on CI.
 
-No Python subprocess. No JavaScript runtime. No system dependencies. Just add `plotkit` to your `Cargo.toml` and start making figures that belong in a journal paper.
-
-## Quick Start
+**plotkit** is a pure-Rust plotting library with a matplotlib-shaped API. Add one crate,
+write three lines, and get an anti-aliased, professionally themed figure as a PNG, SVG, or
+PDF. No GPU. No subprocess. No system dependencies. Identical bytes on Linux, macOS, and Windows.
 
 ```rust
 plotkit::plot(&x, &y)?;
@@ -25,61 +29,54 @@ plotkit::title("sin(x)");
 plotkit::savefig("plot.png")?;
 ```
 
-Three lines. Anti-aliased text, clean axes, and a Tableau-10 color palette out of the box.
+## Why plotkit
+
+- **🎨 It looks good by default.** A hand-tuned theme, the Tableau-10 palette, the
+  Talbot–Lin–Hanrahan tick algorithm, and an automatic layout that never clips a label.
+- **⚡ It's fast.** A 10,000-point line renders to PNG in **~11 ms**; a decimated
+  1,000,000-point scatter in **~34 ms** — all on the CPU. See [BENCHMARKS.md](BENCHMARKS.md).
+- **📦 It's self-contained.** One static binary, zero runtime dependencies. The Inter font
+  is embedded, so text renders deterministically everywhere — no font lookup to fail at 2 AM.
+- **🐍 It's familiar.** If you know matplotlib, you already know plotkit:
+  `Figure`, `Axes`, `ax.plot(...)`, `ax.scatter(...)`, `fig.savefig(...)`.
+- **🔌 It's composable.** Plot straight from Polars `DataFrame`s and `ndarray` arrays,
+  render inline in Jupyter (evcxr), or draw to an HTML canvas via WebAssembly.
 
 ## Installation
 
 ```toml
 [dependencies]
-plotkit = "0.4"
+plotkit = "1.0"
 ```
 
-Optional features:
+<details>
+<summary><b>Optional features</b></summary>
 
 ```toml
-plotkit = { version = "0.4", features = ["svg", "jupyter", "ndarray", "polars"] }
+plotkit = { version = "1.0", features = ["svg", "pdf", "jupyter", "ndarray", "polars"] }
 ```
 
-| Feature    | Description                                |
-|------------|--------------------------------------------|
-| `png`      | PNG rasterization (enabled by default)     |
-| `svg`      | SVG vector output                          |
-| `jupyter`  | Inline display in Evcxr notebooks          |
-| `ndarray`  | Plot directly from `ndarray::Array1`       |
-| `polars`   | Plot directly from Polars `Series`/`DataFrame` |
+| Feature   | Description                                       |
+|-----------|---------------------------------------------------|
+| `png`     | PNG rasterization (**default**)                   |
+| `svg`     | SVG vector output (**default**)                   |
+| `pdf`     | Print-ready PDF vector output                     |
+| `jupyter` | Inline display in Evcxr notebooks                 |
+| `ndarray` | Plot directly from `ndarray::Array1`              |
+| `polars`  | Plot directly from Polars `Series` / `DataFrame`  |
 
-## Chart Types
+</details>
 
-plotkit supports 16 chart types with a matplotlib-familiar API:
+## Quick start
 
-| Chart Type | Method | Description |
-|---|---|---|
-| Line | `ax.plot(x, y)` | Connected data points with optional markers |
-| Scatter | `ax.scatter(x, y)` | Individual data points with colormap support |
-| Bar | `ax.bar(cats, vals)` | Vertical bars with stacking and grouping |
-| Horizontal Bar | `ax.barh(cats, vals)` | Horizontal bars |
-| Grouped Bar | `ax.bar_group(cats, series)` | Side-by-side bars for multiple series |
-| Histogram | `ax.hist(data, bins)` | Frequency distribution |
-| Fill Between | `ax.fill_between(x, y1, y2)` | Shaded region between curves |
-| Step | `ax.step(x, y)` | Staircase function |
-| Stem | `ax.stem(x, y)` | Lollipop chart |
-| Box Plot | `ax.boxplot(datasets)` | Statistical box-and-whisker |
-| Violin | `ax.violin(datasets)` | Kernel density distribution |
-| Error Bar | `ax.errorbar(x, y)` | Data with uncertainty ranges |
-| Heatmap | `ax.heatmap(data)` | 2D color matrix with colorbar |
-| Pie | `ax.pie(sizes)` | Proportional wedge chart |
-| Contour | `ax.contour(x, y, z)` | Iso-line contour plot |
-| Filled Contour | `ax.contourf(x, y, z)` | Filled contour regions |
-
-## Two APIs
-
-### pyplot-style (quick scripts)
+The **pyplot facade** is perfect for scripts — it operates on a current figure, just like
+`matplotlib.pyplot`:
 
 ```rust
 use plotkit::prelude::*;
 
 let x: Vec<f64> = (0..100).map(|i| i as f64 * 0.1).collect();
-let y: Vec<f64> = x.iter().map(|&v| v.sin()).collect();
+let y: Vec<f64> = x.iter().map(|v| v.sin()).collect();
 
 plotkit::plot(&x, &y)?;
 plotkit::title("sin(x)");
@@ -88,173 +85,168 @@ plotkit::ylabel("y");
 plotkit::savefig("sine.png")?;
 ```
 
-### Figure/Axes (full control)
+For full control, drop down to the **Figure / Axes** model:
 
 ```rust
 use plotkit::prelude::*;
-use plotkit::FigureExt;
 
 let mut fig = Figure::with_size(1200, 500);
 
 let ax1 = fig.add_subplot(1, 2, 1);
-ax1.plot(&x, &sin_y)?.label("sin(x)");
-ax1.plot(&x, &cos_y)?.label("cos(x)");
+ax1.plot(&x, &sin_y)?.label("sin(x)").color(Color::TAB_BLUE);
+ax1.plot(&x, &cos_y)?.label("cos(x)").color(Color::TAB_ORANGE);
 ax1.set_title("Trigonometric Functions");
-ax1.set_xlabel("x");
-ax1.set_ylabel("y");
 ax1.legend();
 
 let ax2 = fig.add_subplot(1, 2, 2);
-ax2.scatter(&x, &y)?;
-ax2.set_title("Scatter Plot");
+ax2.scatter(&x, &y)?.marker(Marker::Circle);
+ax2.set_title("Scatter");
 
+fig.tight_layout();
 fig.save("subplots.png")?;
 ```
 
-## Twin Axes
+## Chart types
 
-Overlay two datasets with independent y-scales:
+Sixteen chart types, one familiar API:
 
-```rust
-let mut fig = Figure::with_size(800, 600);
-let ax1 = fig.add_subplot(1, 1, 1);
-ax1.plot(&time, &temperature)?.label("Temperature");
-ax1.set_ylabel("Temperature (°C)");
+| | | | |
+|---|---|---|---|
+| `plot` — line | `scatter` | `bar` / `barh` | `bar_group` |
+| `hist` | `fill_between` | `step` | `stem` |
+| `boxplot` | `violin` | `errorbar` | `heatmap` |
+| `pie` | `contour` / `contourf` | `hexbin` | `polar` / `waterfall` |
 
-let ax2 = fig.twinx(0);
-ax2.plot(&time, &pressure)?.label("Pressure");
-ax2.set_ylabel("Pressure (hPa)");
+Browse the **[gallery of 55+ runnable examples](examples/)** — each is a complete program:
 
-ax1.legend();
+```sh
+cargo run --example 21_multi_line
+cargo run --example 47_df_plot --features polars
 ```
 
-## Colormaps & Colorbar
+## DataFrames & arrays
 
-14 built-in colormaps: Viridis, Plasma, Inferno, Magma, Cividis, Turbo, Coolwarm, Spectral, RdYlBu, RdYlGn, PiYG, BrBG, PRGn, RdBu.
+Polars and ndarray are first-class inputs. Any `Series`, `Array1`, or slice flows through
+the same `IntoSeries` trait — zero glue code:
 
 ```rust
-ax.heatmap(data)?.colormap(Colormap::Viridis).colorbar(true);
-ax.scatter(&x, &y)?.colormap(Colormap::Plasma).c(&values);
+use ndarray::Array1;
+let x = Array1::linspace(0.0, 10.0, 100);
+ax.plot(&x, &x.mapv(f64::sin))?;
 ```
 
-## Scales & Axis Control
+Polars users get a pandas-style **`df.plot()`** accessor with categorical grouping:
 
 ```rust
-ax.set_xscale(Scale::Log10);
-ax.set_yscale(Scale::SymLog { linthresh: 1.0 });
+use plotkit::prelude::*;
+use plotkit::plotkit_polars::DataFramePlotExt;
+
+df.plot()
+    .color_by("symbol")          // one labelled series per category
+    .line("date", "price")?
+    .save("stocks.png")?;
+```
+
+## Themes, colormaps & scales
+
+```rust
+fig.set_theme(Theme::dark());          // default · dark · seaborn · ggplot · publication · nature · solarized
+ax.scatter(&x, &y)?.cmap(Colormap::Viridis).c(values);   // 14 perceptual colormaps
+ax.set_yscale(Scale::Log10);           // Linear · Log10 · SymLog
+```
+
+<details>
+<summary><b>Axis control, twin axes, annotations</b></summary>
+
+```rust
 ax.set_xlim(0.1, 1000.0);
 ax.set_xticks(&[0.1, 1.0, 10.0, 100.0, 1000.0]);
 ax.invert_yaxis();
 ax.grid(true);
+
+let ax2 = fig.twinx(0);                 // independent secondary y-axis
+ax2.plot(&time, &pressure)?;
+
+ax.annotate("peak", (3.0, 0.5), (4.5, 0.8));
+ax.text(2.0, 0.8, "note");
 ```
 
-## Annotations
+</details>
 
-```rust
-ax.text(2.0, 0.8, "Peak", None);
-ax.annotate(
-    "Important point",
-    (3.0, 0.5),   // data point
-    (4.5, 0.8),   // text position
-    ArrowStyle::Arrow,
-);
-```
-
-## Themes
-
-```rust
-fig.set_theme(Theme::dark());   // Dark background, light text
-fig.set_theme(Theme::default()); // Clean white background
-```
-
-Custom themes:
-
-```rust
-let theme = Theme {
-    figure_background: Color::rgb(0xF5, 0xF5, 0xF5),
-    font_family: Some("Helvetica".to_string()),
-    ..Theme::default()
-};
-fig.set_theme(theme);
-```
-
-## DataFrame Integration
-
-### Polars
-
-```rust
-use plotkit::prelude::*;
-
-let df = polars::df! {
-    "x" => [1.0, 2.0, 3.0, 4.0],
-    "y" => [1.0, 4.0, 9.0, 16.0],
-}?;
-
-ax.plot(df.column("x")?, df.column("y")?)?;
-```
-
-### ndarray
-
-```rust
-use ndarray::Array1;
-
-let x = Array1::linspace(0.0, 10.0, 100);
-let y = x.mapv(f64::sin);
-ax.plot(&x, &y)?;
-```
-
-## Output Formats
+## Output formats
 
 | Format | Method | Notes |
 |--------|--------|-------|
-| PNG | `fig.save("out.png")` | CPU-rendered, deterministic |
-| SVG | `fig.save("out.svg")` | Scalable vector, feature `svg` |
-| Bytes | `fig.to_png_bytes()` | For embedding / streaming |
-| String | `fig.to_svg_string()` | For web / templating |
+| PNG | `fig.save("out.png")` | CPU-rasterized, deterministic |
+| SVG | `fig.save("out.svg")` | Scalable vector (`svg` feature) |
+| PDF | `fig.save("out.pdf")` | Print-ready vector (`pdf` feature) |
+| Bytes | `fig.to_png_bytes()` / `fig.to_pdf_bytes()` | Embed or stream |
+| String | `fig.to_svg_string()` | Web / templating |
 
-## Architecture
-
-plotkit is a multi-crate workspace:
-
-| Crate | Purpose |
-|-------|---------|
-| `plotkit` | Umbrella crate with pyplot API |
-| `plotkit-core` | Figure, Axes, Artists, Renderer trait |
-| `plotkit-render-skia` | PNG backend (tiny-skia + cosmic-text) |
-| `plotkit-render-svg` | SVG backend |
-| `plotkit-ndarray` | ndarray integration |
-| `plotkit-polars` | Polars integration |
-
-The `Renderer` trait is the abstraction boundary — core logic never depends on a specific backend. Adding a new output format means implementing one trait.
+Format is selected from the file extension — one method, every backend.
 
 ## Performance
 
-Pure-Rust CPU renderer. No GPU, no system dependencies, no surprises.
+Pure-CPU rendering, measured with Criterion (medians, AMD Ryzen AI 7 350):
 
-plotkit compiles to a single static binary with zero runtime dependencies. It renders plots entirely on the CPU using optimized rasterization. There is no OpenGL context to initialize, no system font lookup to fail, and no shared library to go missing on a CI server at 2 AM.
+| Workload | Measured |
+|---|---|
+| 10k-point line → PNG | **10.9 ms** |
+| 100k-point line → PNG (auto LTTB) | **13.7 ms** |
+| 1M-point scatter → PNG (decimated) | **33.7 ms** |
+| Figure creation (no render) | **434 ns** |
 
-Embedded Inter font (Regular + Bold) ensures deterministic, cross-platform text rendering — the same plot looks identical on Linux, macOS, and Windows.
+Automatic [LTTB](https://github.com/sveinn-steinarsson/flot-downsample) decimation keeps the
+rasterizer working on a screen-sized point count no matter how large the input. Full
+methodology and TRD targets in **[BENCHMARKS.md](BENCHMARKS.md)**.
 
-## Roadmap
+## Render anywhere — including the browser
+
+The `Renderer` trait is the only seam between plot logic and pixels, so the same figure code
+targets every backend. `plotkit-render-wasm` draws to an HTML5 canvas via WebAssembly:
+
+```sh
+wasm-pack build crates/plotkit-render-wasm --target web --out-dir ../../web/pkg
+```
+
+A ready-to-serve demo lives in [`web/`](web/).
+
+## Architecture
+
+plotkit is a focused multi-crate workspace:
+
+| Crate | Purpose |
+|-------|---------|
+| `plotkit` | Umbrella crate — pyplot facade + `save` |
+| `plotkit-core` | `Figure`, `Axes`, artists, the `Renderer` trait |
+| `plotkit-render-skia` | PNG backend (tiny-skia + cosmic-text) |
+| `plotkit-render-svg` | SVG backend |
+| `plotkit-render-pdf` | PDF backend (printpdf) |
+| `plotkit-render-wasm` | WASM Canvas2D backend |
+| `plotkit-ndarray` · `plotkit-polars` | DataFrame / array integration |
+
+Core logic never depends on a concrete backend — adding a new output format means
+implementing one trait.
+
+## Status & roadmap
+
+**v1.0 — stable.** The public API is semver-stable; signatures shipped in 1.0 only grow,
+never break. Shipping today: 16 chart types, PNG/SVG/PDF, 7 themes, 14 colormaps,
+log/symlog scales, twin axes, subplots, Polars + ndarray, Jupyter inline rendering, and a
+WASM backend.
 
 | Version | Focus |
 |---------|-------|
-| v0.5 | WASM support — render in the browser |
-| v0.6 | 3D surface plots |
-| v0.7 | Animation / frame sequences |
-| v1.0 | Stable API, full documentation |
+| v1.1 | Animation / frame sequences |
+| v1.2 | 3D surface plots |
+| v1.x | Interactive widgets; optional GPU (Vello) backend behind the `Renderer` trait |
 
 ## Contributing
 
-Contributions are welcome. Whether it's a bug report, a feature request, or a pull request — we appreciate it.
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) before getting started.
+Bug reports, feature requests, and pull requests are all welcome — start with
+[CONTRIBUTING.md](CONTRIBUTING.md). Every visual change needs an `insta` golden-image
+snapshot; run `cargo insta review` before committing.
 
 ## License
 
-Licensed under either of
-
-- [MIT License](LICENSE-MIT)
-- [Apache License, Version 2.0](LICENSE-APACHE)
-
-at your option.
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.

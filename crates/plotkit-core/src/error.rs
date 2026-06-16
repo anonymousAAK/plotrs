@@ -28,8 +28,9 @@ pub enum PlotError {
 impl fmt::Display for PlotError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SeriesLengthMismatch { expected, got } =>
-                write!(f, "series length mismatch: expected {expected}, got {got}"),
+            Self::SeriesLengthMismatch { expected, got } => {
+                write!(f, "series length mismatch: expected {expected}, got {got}")
+            }
             Self::EmptyData => write!(f, "data series is empty"),
             Self::UnknownColumn(name) => write!(f, "unknown column: {name}"),
             Self::Io(err) => write!(f, "I/O error: {err}"),

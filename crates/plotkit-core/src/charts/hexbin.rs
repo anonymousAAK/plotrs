@@ -113,12 +113,7 @@ pub fn hexagon_vertices(cx: f64, cy: f64, size: f64) -> [(f64, f64); 6] {
 ///      to the nearest hex cell using cube-coordinate rounding.
 ///   3. Accumulate counts in a hash map keyed by axial `(q, r)`.
 ///   4. Convert each cell's axial coordinates back to Cartesian centers.
-pub fn bin_hexagonal(
-    x: &[f64],
-    y: &[f64],
-    gridsize: usize,
-    mincnt: usize,
-) -> HexBinResult {
+pub fn bin_hexagonal(x: &[f64], y: &[f64], gridsize: usize, mincnt: usize) -> HexBinResult {
     if x.is_empty() || y.is_empty() {
         return HexBinResult {
             cells: Vec::new(),
@@ -252,21 +247,37 @@ fn data_extent(x: &[f64], y: &[f64]) -> (f64, f64, f64, f64) {
 
     for &v in x {
         if v.is_finite() {
-            if v < xmin { xmin = v; }
-            if v > xmax { xmax = v; }
+            if v < xmin {
+                xmin = v;
+            }
+            if v > xmax {
+                xmax = v;
+            }
         }
     }
     for &v in y {
         if v.is_finite() {
-            if v < ymin { ymin = v; }
-            if v > ymax { ymax = v; }
+            if v < ymin {
+                ymin = v;
+            }
+            if v > ymax {
+                ymax = v;
+            }
         }
     }
 
-    if !xmin.is_finite() { xmin = 0.0; }
-    if !xmax.is_finite() { xmax = 1.0; }
-    if !ymin.is_finite() { ymin = 0.0; }
-    if !ymax.is_finite() { ymax = 1.0; }
+    if !xmin.is_finite() {
+        xmin = 0.0;
+    }
+    if !xmax.is_finite() {
+        xmax = 1.0;
+    }
+    if !ymin.is_finite() {
+        ymin = 0.0;
+    }
+    if !ymax.is_finite() {
+        ymax = 1.0;
+    }
     if (xmax - xmin).abs() < f64::EPSILON {
         xmin -= 0.5;
         xmax += 0.5;

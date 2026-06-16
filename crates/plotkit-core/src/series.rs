@@ -258,15 +258,13 @@ mod polars_impls {
     /// Extracts numeric values from a Polars [`Series`](polars::prelude::Series),
     /// casting to `f64`. Null entries become `f64::NAN`.
     fn extract_numeric(series: &polars::prelude::Series) -> Vec<f64> {
-        let ca = series
-            .cast(&DataType::Float64)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "plotkit-polars: cannot cast series {:?} (dtype {:?}) to Float64",
-                    series.name(),
-                    series.dtype()
-                )
-            });
+        let ca = series.cast(&DataType::Float64).unwrap_or_else(|_| {
+            panic!(
+                "plotkit-polars: cannot cast series {:?} (dtype {:?}) to Float64",
+                series.name(),
+                series.dtype()
+            )
+        });
         let ca = ca
             .f64()
             .expect("cast to Float64 always yields f64 chunked array");

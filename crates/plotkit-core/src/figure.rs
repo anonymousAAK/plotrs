@@ -178,7 +178,21 @@ impl Figure {
     ///
     /// Returns `&mut Self` for builder-style chaining.
     pub fn suptitle(&mut self, title: &str) -> &mut Self {
-        self.suptitle = Some(title.to_string());
+        self.suptitle = Some(crate::text::format_markup(title));
+        self
+    }
+
+    /// Adjusts subplot spacing so axis labels, tick labels, and titles do not
+    /// overlap or clip — the matplotlib `tight_layout()` equivalent.
+    ///
+    /// plotkit computes margins automatically on every render (each axes
+    /// reserves exactly the space its labels and ticks need, via
+    /// [`crate::layout`]), so the layout is already "tight" by default. This
+    /// method exists for matplotlib API parity and to make the intent explicit;
+    /// it is safe to call and returns `&mut Self` for builder-style chaining.
+    pub fn tight_layout(&mut self) -> &mut Self {
+        // Layout is recomputed from scratch at render time, so there is no
+        // cached state to invalidate here. Provided for API compatibility.
         self
     }
 
@@ -226,7 +240,10 @@ impl Figure {
     ///
     /// Panics if `nrows` or `ncols` is zero.
     pub fn subplots(nrows: usize, ncols: usize) -> Self {
-        assert!(nrows > 0 && ncols > 0, "subplots: nrows and ncols must be > 0");
+        assert!(
+            nrows > 0 && ncols > 0,
+            "subplots: nrows and ncols must be > 0"
+        );
         let mut fig = Self::new();
         for i in 1..=(nrows * ncols) {
             fig.add_subplot(nrows, ncols, i);
@@ -240,7 +257,10 @@ impl Figure {
     ///
     /// Panics if `nrows` or `ncols` is zero.
     pub fn subplots_with_size(nrows: usize, ncols: usize, width: u32, height: u32) -> Self {
-        assert!(nrows > 0 && ncols > 0, "subplots: nrows and ncols must be > 0");
+        assert!(
+            nrows > 0 && ncols > 0,
+            "subplots: nrows and ncols must be > 0"
+        );
         let mut fig = Self::with_size(width, height);
         for i in 1..=(nrows * ncols) {
             fig.add_subplot(nrows, ncols, i);
@@ -378,11 +398,8 @@ impl Figure {
 
         // ----- 4. Render each axes -----------------------------------------
         // Build a set of twin indices so we skip them in the primary loop.
-        let twin_indices: std::collections::HashSet<usize> = self
-            .twin_map
-            .iter()
-            .filter_map(|opt| *opt)
-            .collect();
+        let twin_indices: std::collections::HashSet<usize> =
+            self.twin_map.iter().filter_map(|opt| *opt).collect();
 
         for (i, axes) in self.axes.iter().enumerate() {
             // Skip twin axes -- they are rendered after their parent.
@@ -437,7 +454,11 @@ impl Figure {
     ///
     /// The renderer determines the output format. The encoded bytes are
     /// written to `path` atomically via [`std::fs::write`].
-    pub fn save_with<R: Renderer>(&self, renderer: R, path: impl AsRef<std::path::Path>) -> Result<()> {
+    pub fn save_with<R: Renderer>(
+        &self,
+        renderer: R,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<()> {
         let bytes = self.render_to(renderer);
         std::fs::write(path, bytes)?;
         Ok(())

@@ -47,7 +47,12 @@ impl Margins {
 
     /// Creates margins with specified values for each side.
     pub fn new(top: f64, right: f64, bottom: f64, left: f64) -> Self {
-        Self { top, right, bottom, left }
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
     }
 
     /// Returns the total horizontal margin (left + right).

@@ -1,6 +1,6 @@
 [package]
 name = "plotkit-render-wasm"
-version = "0.6.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.75"
 description = "WASM Canvas2D rendering backend for plotkit"
@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/anonymousAAK/plotrs"
 
 [dependencies]
-plotkit-core = { path = "../plotkit-core", version = "0.6.0" }
+plotkit-core = { path = "../plotkit-core", version = "1.0.0" }
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = [
     "CanvasRenderingContext2d",
@@ -16,6 +16,7 @@ web-sys = { version = "0.3", features = [
     "Document",
     "Window",
     "ImageData",
+    "TextMetrics",
 ] }
 js-sys = "0.3"
 

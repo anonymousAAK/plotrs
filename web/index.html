@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>plotkit — WASM demo</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 0; padding: 2rem; display: flex; flex-direction: column;
+        align-items: center; gap: 1.25rem;
+      }
+      h1 { margin: 0; font-weight: 650; letter-spacing: -0.02em; }
+      p { margin: 0; opacity: 0.7; }
+      .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      button {
+        font: inherit; padding: 0.45rem 0.9rem; border-radius: 8px;
+        border: 1px solid currentColor; background: transparent; cursor: pointer;
+      }
+      button.active { background: #4e79a7; color: white; border-color: #4e79a7; }
+      canvas {
+        border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+        background: white; max-width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>plotkit</h1>
+    <p>Publication-quality plots rendered in the browser via WebAssembly — no server, no GPU.</p>
+    <div class="toolbar" id="toolbar">
+      <button data-kind="line" class="active">Line</button>
+      <button data-kind="scatter">Scatter</button>
+      <button data-kind="bar">Bar</button>
+      <button data-kind="hist">Histogram</button>
+    </div>
+    <canvas id="plot" width="800" height="600"></canvas>
+
+    <script type="module">
+      import init, { render_demo } from "./pkg/plotkit_render_wasm.js";
+
+      const canvas = document.getElementById("plot");
+      const toolbar = document.getElementById("toolbar");
+      let ready = false;
+
+      function draw(kind) {
+        if (!ready) return;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        render_demo(canvas, kind);
+      }
+
+      toolbar.addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        for (const b of toolbar.children) b.classList.toggle("active", b === btn);
+        draw(btn.dataset.kind);
+      });
+
+      (async () => {
+        await init();
+        ready = true;
+        draw("line");
+      })();
+    </script>
+  </body>
+</html>

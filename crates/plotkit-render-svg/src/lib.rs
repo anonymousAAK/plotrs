@@ -34,13 +34,7 @@ impl SvgRenderer {
         if c.a == 255 {
             format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
         } else {
-            format!(
-                "rgba({},{},{},{:.4})",
-                c.r,
-                c.g,
-                c.b,
-                c.a as f64 / 255.0
-            )
+            format!("rgba({},{},{},{:.4})", c.r, c.g, c.b, c.a as f64 / 255.0)
         }
     }
 
@@ -59,14 +53,12 @@ impl SvgRenderer {
                 PathEl::QuadTo(p1, p) => {
                     write!(d, "Q{:.2} {:.2} {:.2} {:.2} ", p1.x, p1.y, p.x, p.y).unwrap()
                 }
-                PathEl::CurveTo(p1, p2, p) => {
-                    write!(
-                        d,
-                        "C{:.2} {:.2} {:.2} {:.2} {:.2} {:.2} ",
-                        p1.x, p1.y, p2.x, p2.y, p.x, p.y
-                    )
-                    .unwrap()
-                }
+                PathEl::CurveTo(p1, p2, p) => write!(
+                    d,
+                    "C{:.2} {:.2} {:.2} {:.2} {:.2} {:.2} ",
+                    p1.x, p1.y, p2.x, p2.y, p.x, p.y
+                )
+                .unwrap(),
                 PathEl::ClosePath => d.push_str("Z "),
             }
         }

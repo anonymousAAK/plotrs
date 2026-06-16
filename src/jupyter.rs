@@ -44,7 +44,9 @@ mod tests {
         let renderer = plotkit_render_skia::SkiaRenderer::new(fig.width(), fig.height());
         let bytes = fig.render_to(renderer);
         let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let decoded = base64::engine::general_purpose::STANDARD.decode(&b64).unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&b64)
+            .unwrap();
         assert_eq!(bytes, decoded);
     }
 

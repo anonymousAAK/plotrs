@@ -77,10 +77,23 @@ pub fn compute_stats(data: &[f64], whisker_factor: f64) -> BoxStats {
     let fence_high = q3 + whisker_factor * iqr;
 
     // Whisker endpoints are the most extreme data points within the fences.
-    let whisker_low = sorted.iter().copied().find(|&v| v >= fence_low).unwrap_or(q1);
-    let whisker_high = sorted.iter().rev().copied().find(|&v| v <= fence_high).unwrap_or(q3);
+    let whisker_low = sorted
+        .iter()
+        .copied()
+        .find(|&v| v >= fence_low)
+        .unwrap_or(q1);
+    let whisker_high = sorted
+        .iter()
+        .rev()
+        .copied()
+        .find(|&v| v <= fence_high)
+        .unwrap_or(q3);
 
-    let outliers: Vec<f64> = sorted.iter().copied().filter(|&v| v < whisker_low || v > whisker_high).collect();
+    let outliers: Vec<f64> = sorted
+        .iter()
+        .copied()
+        .filter(|&v| v < whisker_low || v > whisker_high)
+        .collect();
 
     BoxStats {
         q1,
@@ -308,9 +321,11 @@ mod tests {
         let mut artist = sample_boxplot_artist();
         let old_stats = artist.stats.clone();
         artist.whisker_factor(0.5);
-        assert!(artist.stats[0].whisker_high <= old_stats[0].whisker_high
-            || artist.stats[0].whisker_low >= old_stats[0].whisker_low
-            || artist.stats[0].outliers.len() >= old_stats[0].outliers.len());
+        assert!(
+            artist.stats[0].whisker_high <= old_stats[0].whisker_high
+                || artist.stats[0].whisker_low >= old_stats[0].whisker_low
+                || artist.stats[0].outliers.len() >= old_stats[0].outliers.len()
+        );
     }
 
     #[test]
@@ -325,10 +340,7 @@ mod tests {
 
     #[test]
     fn data_bounds_multiple_groups() {
-        let raw = vec![
-            vec![1.0, 2.0, 3.0],
-            vec![10.0, 20.0, 30.0],
-        ];
+        let raw = vec![vec![1.0, 2.0, 3.0], vec![10.0, 20.0, 30.0]];
         let stats: Vec<BoxStats> = raw.iter().map(|d| compute_stats(d, 1.5)).collect();
         let artist = BoxPlotArtist {
             stats,

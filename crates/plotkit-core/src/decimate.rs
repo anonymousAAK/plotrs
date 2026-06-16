@@ -195,7 +195,12 @@ pub fn lttb(x: &[f64], y: &[f64], threshold: usize) -> Vec<usize> {
         let mut best_area = -1.0_f64;
         let mut best_valid_idx = bucket_start;
 
-        for (vi, &orig) in valid.iter().enumerate().skip(bucket_start).take(bucket_end - bucket_start) {
+        for (vi, &orig) in valid
+            .iter()
+            .enumerate()
+            .skip(bucket_start)
+            .take(bucket_end - bucket_start)
+        {
             let area = triangle_area(px, py, x[orig], y[orig], avg_x, avg_y);
             if area > best_area {
                 best_area = area;
@@ -421,8 +426,16 @@ mod tests {
         let max_selected = selected_y.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let min_selected = selected_y.iter().cloned().fold(f64::INFINITY, f64::min);
 
-        assert!(max_selected > 0.95, "peak not preserved: max = {}", max_selected);
-        assert!(min_selected < -0.95, "trough not preserved: min = {}", min_selected);
+        assert!(
+            max_selected > 0.95,
+            "peak not preserved: max = {}",
+            max_selected
+        );
+        assert!(
+            min_selected < -0.95,
+            "trough not preserved: min = {}",
+            min_selected
+        );
     }
 
     #[test]
@@ -484,7 +497,7 @@ mod tests {
         // Data with a clear spike and dip.
         let x: Vec<f64> = (0..20).map(|i| i as f64).collect();
         let mut y: Vec<f64> = vec![0.0; 20];
-        y[5] = 100.0;  // spike
+        y[5] = 100.0; // spike
         y[15] = -100.0; // dip
 
         let indices = minmax(&x, &y, 10);
@@ -537,7 +550,10 @@ mod tests {
     fn lttb_large_dataset_smoke() {
         let n = 100_000;
         let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
-        let y: Vec<f64> = x.iter().map(|v| (v * 0.01).sin() + (v * 0.1).cos()).collect();
+        let y: Vec<f64> = x
+            .iter()
+            .map(|v| (v * 0.01).sin() + (v * 0.1).cos())
+            .collect();
 
         let threshold = 500;
         let indices = lttb(&x, &y, threshold);
@@ -678,8 +694,7 @@ mod tests {
         let n = 4000;
         let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
         let y: Vec<f64> = x.iter().map(|v| (v * 0.05).sin()).collect();
-        let indices =
-            DecimateMode::Explicit(250, DecimateMethod::Lttb).resolve_indices(&x, &y);
+        let indices = DecimateMode::Explicit(250, DecimateMethod::Lttb).resolve_indices(&x, &y);
         assert_eq!(indices.len(), 250);
         assert_eq!(*indices.first().unwrap(), 0);
         assert_eq!(*indices.last().unwrap(), n - 1);
@@ -690,8 +705,7 @@ mod tests {
         let n = 4000;
         let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
         let y: Vec<f64> = x.iter().map(|v| (v * 0.05).sin()).collect();
-        let indices =
-            DecimateMode::Explicit(250, DecimateMethod::MinMax).resolve_indices(&x, &y);
+        let indices = DecimateMode::Explicit(250, DecimateMethod::MinMax).resolve_indices(&x, &y);
         assert!(indices.len() <= 250);
         assert_eq!(*indices.first().unwrap(), 0);
         assert_eq!(*indices.last().unwrap(), n - 1);
@@ -703,8 +717,7 @@ mod tests {
         let n = 100;
         let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
         let y = x.clone();
-        let indices =
-            DecimateMode::Explicit(5000, DecimateMethod::Lttb).resolve_indices(&x, &y);
+        let indices = DecimateMode::Explicit(5000, DecimateMethod::Lttb).resolve_indices(&x, &y);
         assert_eq!(indices, (0..n).collect::<Vec<_>>());
     }
 
@@ -713,7 +726,10 @@ mod tests {
         // Same input must yield identical indices across repeated calls.
         let n = 20_000;
         let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
-        let y: Vec<f64> = x.iter().map(|v| (v * 0.003).sin() + (v * 0.07).cos()).collect();
+        let y: Vec<f64> = x
+            .iter()
+            .map(|v| (v * 0.003).sin() + (v * 0.07).cos())
+            .collect();
         let a = DecimateMode::Auto.resolve_indices(&x, &y);
         let b = DecimateMode::Auto.resolve_indices(&x, &y);
         assert_eq!(a, b);

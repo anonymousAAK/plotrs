@@ -67,8 +67,77 @@ pub fn generate_ticks(
         Scale::SymLog { linthresh } => {
             generate_symlog_ticks(data_min, data_max, target_count, *linthresh)
         }
+        Scale::Time => {
+            // Linear positions, but each label is rendered as a calendar date.
+            let ticks = generate_linear_ticks(data_min, data_max, target_count);
+            let span = (data_max - data_min).abs();
+            return ticks
+                .positions
+                .into_iter()
+                .map(|value| Tick {
+                    value,
+                    label: format_timestamp(value, span),
+                })
+                .collect();
+        }
     };
     tick_set.into_ticks()
+}
+
+// ---------------------------------------------------------------------------
+// Time-axis date formatting (no external dependencies)
+// ---------------------------------------------------------------------------
+
+/// Converts a count of days since the Unix epoch (1970-01-01) to a
+/// `(year, month, day)` civil date, using Howard Hinnant's algorithm.
+///
+/// Valid for the full range of representable `i64` days.
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32; // [1, 12]
+    let y = if m <= 2 { y + 1 } else { y };
+    (y, m, d)
+}
+
+/// Formats a timestamp (seconds since the Unix epoch) as a calendar label,
+/// choosing granularity from the visible `span_secs`:
+///
+/// | span | format |
+/// |---|---|
+/// | > ~2 years | `YYYY` |
+/// | > ~2 months | `YYYY-MM` |
+/// | > ~2 days | `MM-DD` |
+/// | > ~2 minutes | `HH:MM` |
+/// | otherwise | `HH:MM:SS` |
+pub fn format_timestamp(secs: f64, span_secs: f64) -> String {
+    if !secs.is_finite() {
+        return "0".to_string();
+    }
+    let total = secs.floor() as i64;
+    let days = total.div_euclid(86_400);
+    let tod = total.rem_euclid(86_400); // seconds into the day, always >= 0
+    let (y, m, d) = civil_from_days(days);
+    let (hh, mm, ss) = (tod / 3600, (tod % 3600) / 60, tod % 60);
+
+    const DAY: f64 = 86_400.0;
+    if span_secs > 730.0 * DAY {
+        format!("{y:04}")
+    } else if span_secs > 60.0 * DAY {
+        format!("{y:04}-{m:02}")
+    } else if span_secs > 2.0 * DAY {
+        format!("{m:02}-{d:02}")
+    } else if span_secs > 120.0 {
+        format!("{hh:02}:{mm:02}")
+    } else {
+        format!("{hh:02}:{mm:02}:{ss:02}")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -340,9 +409,12 @@ fn generate_log_ticks(data_min: f64, data_max: f64, target_count: usize) -> Tick
         }
         // Always include the last power.
         let last = 10.0_f64.powi(log_hi);
-        if positions.last().map_or(true, |&v| (v - last).abs() > f64::EPSILON)
-            && last <= hi * 1.001 {
-                positions.push(last);
+        if positions
+            .last()
+            .map_or(true, |&v| (v - last).abs() > f64::EPSILON)
+            && last <= hi * 1.001
+        {
+            positions.push(last);
         }
     }
 
@@ -389,7 +461,12 @@ pub fn generate_log_minor_ticks(data_min: f64, data_max: f64) -> Vec<f64> {
 /// Produces ticks that reflect the symmetry of the symlog transform: logarithmic
 /// ticks for the positive and negative regions beyond `linthresh`, and linear
 /// ticks in the `[-linthresh, linthresh]` region.
-fn generate_symlog_ticks(data_min: f64, data_max: f64, target_count: usize, linthresh: f64) -> TickSet {
+fn generate_symlog_ticks(
+    data_min: f64,
+    data_max: f64,
+    target_count: usize,
+    linthresh: f64,
+) -> TickSet {
     // Guard: if linthresh is non-positive or non-finite, fall back to linear ticks.
     if linthresh <= 0.0 || !linthresh.is_finite() {
         return generate_linear_ticks(data_min, data_max, target_count);
@@ -778,7 +855,10 @@ mod tests {
     #[test]
     fn degenerate_same_min_max() {
         let ticks = generate_ticks(5.0, 5.0, 6, &Scale::Linear);
-        assert!(!ticks.is_empty(), "should produce ticks even for degenerate range");
+        assert!(
+            !ticks.is_empty(),
+            "should produce ticks even for degenerate range"
+        );
     }
 
     #[test]
@@ -893,14 +973,21 @@ mod tests {
     fn density_score_perfect() {
         // When num_ticks == target, score should be 1.0.
         let s = density_score(6.0, 6.0, 10.0);
-        assert!((s - 1.0).abs() < 1e-10, "perfect density score should be 1.0, got {}", s);
+        assert!(
+            (s - 1.0).abs() < 1e-10,
+            "perfect density score should be 1.0, got {}",
+            s
+        );
     }
 
     #[test]
     fn density_score_degrades() {
         let s6 = density_score(6.0, 6.0, 10.0);
         let s12 = density_score(12.0, 6.0, 10.0);
-        assert!(s6 > s12, "density should degrade as tick count diverges from target");
+        assert!(
+            s6 > s12,
+            "density should degrade as tick count diverges from target"
+        );
     }
 
     #[test]
@@ -961,7 +1048,11 @@ mod tests {
         assert_nice(&ticks);
         assert_covers(&ticks, -100.0, -10.0);
         for t in &ticks {
-            assert!(t.value <= 0.0, "ticks for negative range should be non-positive: {}", t.value);
+            assert!(
+                t.value <= 0.0,
+                "ticks for negative range should be non-positive: {}",
+                t.value
+            );
         }
     }
 
@@ -996,8 +1087,16 @@ mod tests {
         assert!(pos.contains(&1.0), "should include 10^0 = 1: {:?}", pos);
         assert!(pos.contains(&10.0), "should include 10^1 = 10: {:?}", pos);
         assert!(pos.contains(&100.0), "should include 10^2 = 100: {:?}", pos);
-        assert!(pos.contains(&1000.0), "should include 10^3 = 1000: {:?}", pos);
-        assert!(pos.contains(&10000.0), "should include 10^4 = 10000: {:?}", pos);
+        assert!(
+            pos.contains(&1000.0),
+            "should include 10^3 = 1000: {:?}",
+            pos
+        );
+        assert!(
+            pos.contains(&10000.0),
+            "should include 10^4 = 10000: {:?}",
+            pos
+        );
     }
 
     #[test]
@@ -1013,7 +1112,11 @@ mod tests {
         // 10 decades.
         let ticks = generate_ticks(1e-5, 1e5, 7, &Scale::Log10);
         assert_nice(&ticks);
-        assert!(ticks.len() >= 3, "should have at least 3 ticks: {:?}", positions(&ticks));
+        assert!(
+            ticks.len() >= 3,
+            "should have at least 3 ticks: {:?}",
+            positions(&ticks)
+        );
     }
 
     #[test]
@@ -1055,7 +1158,12 @@ mod tests {
     fn log_minor_ticks_sorted() {
         let minor = generate_log_minor_ticks(1.0, 10000.0);
         for w in minor.windows(2) {
-            assert!(w[1] >= w[0], "minor ticks not sorted: {} before {}", w[0], w[1]);
+            assert!(
+                w[1] >= w[0],
+                "minor ticks not sorted: {} before {}",
+                w[0],
+                w[1]
+            );
         }
     }
 
@@ -1067,15 +1175,27 @@ mod tests {
     fn symlog_ticks_include_zero_dedicated() {
         let ticks = generate_ticks(-100.0, 100.0, 7, &Scale::SymLog { linthresh: 1.0 });
         let pos = positions(&ticks);
-        assert!(pos.contains(&0.0), "symlog ticks should include zero: {:?}", pos);
+        assert!(
+            pos.contains(&0.0),
+            "symlog ticks should include zero: {:?}",
+            pos
+        );
     }
 
     #[test]
     fn symlog_ticks_include_linthresh() {
         let ticks = generate_ticks(-1000.0, 1000.0, 7, &Scale::SymLog { linthresh: 10.0 });
         let pos = positions(&ticks);
-        assert!(pos.contains(&10.0), "should include +linthresh=10: {:?}", pos);
-        assert!(pos.contains(&-10.0), "should include -linthresh=-10: {:?}", pos);
+        assert!(
+            pos.contains(&10.0),
+            "should include +linthresh=10: {:?}",
+            pos
+        );
+        assert!(
+            pos.contains(&-10.0),
+            "should include -linthresh=-10: {:?}",
+            pos
+        );
     }
 
     #[test]

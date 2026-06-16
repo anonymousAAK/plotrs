@@ -104,14 +104,8 @@ fn svg_contains_text_elements_for_labels() {
         svg.contains("Test Title"),
         "SVG must contain the title text"
     );
-    assert!(
-        svg.contains("X Axis"),
-        "SVG must contain the xlabel text"
-    );
-    assert!(
-        svg.contains("Y Axis"),
-        "SVG must contain the ylabel text"
-    );
+    assert!(svg.contains("X Axis"), "SVG must contain the xlabel text");
+    assert!(svg.contains("Y Axis"), "SVG must contain the ylabel text");
 }
 
 #[test]
@@ -169,8 +163,14 @@ fn svg_multi_series_with_legend() {
     let svg = fig.to_svg_string().unwrap();
 
     // Legend text should appear in the SVG
-    assert!(svg.contains("sin(x)"), "SVG must contain legend label sin(x)");
-    assert!(svg.contains("cos(x)"), "SVG must contain legend label cos(x)");
+    assert!(
+        svg.contains("sin(x)"),
+        "SVG must contain legend label sin(x)"
+    );
+    assert!(
+        svg.contains("cos(x)"),
+        "SVG must contain legend label cos(x)"
+    );
 }
 
 #[test]
@@ -213,8 +213,14 @@ fn svg_empty_axes_still_produces_valid_svg() {
     let svg = fig.to_svg_string().unwrap();
 
     let trimmed = svg.trim();
-    assert!(trimmed.starts_with("<svg"), "Empty axes SVG must start with <svg");
-    assert!(trimmed.ends_with("</svg>"), "Empty axes SVG must end with </svg>");
+    assert!(
+        trimmed.starts_with("<svg"),
+        "Empty axes SVG must start with <svg"
+    );
+    assert!(
+        trimmed.ends_with("</svg>"),
+        "Empty axes SVG must end with </svg>"
+    );
 }
 
 #[test]
@@ -300,26 +306,11 @@ fn svg_text_html_escaping() {
 
     // The html_escape function should convert these:
     // & -> &amp;   < -> &lt;   > -> &gt;   " -> &quot;   ' -> &#x27;
-    assert!(
-        svg.contains("&lt;"),
-        "SVG must escape < to &lt;"
-    );
-    assert!(
-        svg.contains("&amp;"),
-        "SVG must escape & to &amp;"
-    );
-    assert!(
-        svg.contains("&gt;"),
-        "SVG must escape > to &gt;"
-    );
-    assert!(
-        svg.contains("&quot;"),
-        "SVG must escape \" to &quot;"
-    );
-    assert!(
-        svg.contains("&#x27;"),
-        "SVG must escape ' to &#x27;"
-    );
+    assert!(svg.contains("&lt;"), "SVG must escape < to &lt;");
+    assert!(svg.contains("&amp;"), "SVG must escape & to &amp;");
+    assert!(svg.contains("&gt;"), "SVG must escape > to &gt;");
+    assert!(svg.contains("&quot;"), "SVG must escape \" to &quot;");
+    assert!(svg.contains("&#x27;"), "SVG must escape ' to &#x27;");
 
     // Make sure the raw unescaped characters do NOT appear in text content
     // (they will appear in SVG attribute syntax though, so we check specifically
@@ -334,7 +325,10 @@ fn svg_text_html_escaping() {
 fn svg_font_family_in_text_style() {
     // When a theme specifies a font family, it should appear in text elements
     let mut fig = Figure::with_size(800, 600);
-    let theme = Theme { font_family: Some("Arial".to_string()), ..Theme::default() };
+    let theme = Theme {
+        font_family: Some("Arial".to_string()),
+        ..Theme::default()
+    };
     fig.set_theme(theme);
     let ax = fig.add_subplot(1, 1, 1);
     ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
@@ -366,7 +360,9 @@ fn svg_output_is_valid_utf8() {
 
 #[test]
 fn svg_histogram_renders() {
-    let data: Vec<f64> = (0..100).map(|i| (i as f64 * 0.31).sin() * 2.0 + 3.0).collect();
+    let data: Vec<f64> = (0..100)
+        .map(|i| (i as f64 * 0.31).sin() * 2.0 + 3.0)
+        .collect();
 
     let mut fig = Figure::with_size(800, 600);
     let ax = fig.add_subplot(1, 1, 1);
@@ -403,7 +399,10 @@ fn svg_multiple_subplots() {
     let svg = fig.to_svg_string().unwrap();
 
     assert!(svg.contains("Left"), "SVG must contain first subplot title");
-    assert!(svg.contains("Right"), "SVG must contain second subplot title");
+    assert!(
+        svg.contains("Right"),
+        "SVG must contain second subplot title"
+    );
 
     // Two subplots should produce at least 2 clip regions
     let clip_count = svg.matches("<clipPath").count();

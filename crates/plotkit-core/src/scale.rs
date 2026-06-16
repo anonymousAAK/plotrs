@@ -14,6 +14,10 @@ pub enum Scale {
         /// The range (-linthresh, linthresh) is treated linearly.
         linthresh: f64,
     },
+    /// Time axis. Values are interpreted as **seconds since the Unix epoch**
+    /// (1970-01-01 UTC) and transform linearly; tick labels are rendered as
+    /// calendar dates/times, with granularity chosen from the visible span.
+    Time,
 }
 
 impl Scale {
@@ -47,7 +51,7 @@ impl Scale {
     /// clipping or extrapolation by the caller.
     pub fn transform(&self, val: f64, min: f64, max: f64) -> f64 {
         match self {
-            Scale::Linear => {
+            Scale::Linear | Scale::Time => {
                 if (max - min).abs() < f64::EPSILON {
                     0.5
                 } else {
@@ -80,7 +84,7 @@ impl Scale {
     /// Inverse transform: maps a normalized [0, 1] value back to data space.
     pub fn inverse(&self, t: f64, min: f64, max: f64) -> f64 {
         match self {
-            Scale::Linear => min + t * (max - min),
+            Scale::Linear | Scale::Time => min + t * (max - min),
             Scale::Log10 => {
                 let log_min = min.max(f64::EPSILON).log10();
                 let log_max = max.max(f64::EPSILON).log10();
@@ -206,7 +210,10 @@ mod tests {
         let s = Scale::SymLog { linthresh: 1.0 };
         // Zero should be at the expected normalized position for a symmetric range.
         let t = s.transform(0.0, -100.0, 100.0);
-        assert!(approx_eq(t, 0.5), "zero should map to 0.5 for symmetric range, got {t}");
+        assert!(
+            approx_eq(t, 0.5),
+            "zero should map to 0.5 for symmetric range, got {t}"
+        );
     }
 
     #[test]

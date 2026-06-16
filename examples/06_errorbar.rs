@@ -13,7 +13,8 @@ fn main() -> plotkit::Result<()> {
     let ax = fig.add_subplot(1, 1, 1);
 
     // Create error bar plot with symmetric y-errors.
-    let mut eb = ax.errorbar(&x, &y)?
+    let mut eb = ax
+        .errorbar(&x, &y)?
         .yerr_symmetric(&yerr)
         .xerr_symmetric(&xerr);
     eb.color(Color::TAB_BLUE)

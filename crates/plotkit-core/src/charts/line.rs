@@ -166,14 +166,14 @@ mod tests {
     #[test]
     fn line_defaults_to_auto_decimate() {
         let mut ax = make_axes();
-        let artist = ax.plot(&[0.0, 1.0, 2.0], &[0.0, 1.0, 2.0]).unwrap();
+        let artist = ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 2.0]).unwrap();
         assert_eq!(artist.decimate, DecimateMode::Auto);
     }
 
     #[test]
     fn line_decimate_sets_explicit_lttb() {
         let mut ax = make_axes();
-        let artist = ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        let artist = ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
         artist.decimate(1000);
         assert_eq!(
             artist.decimate,
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn line_decimate_with_sets_explicit_method() {
         let mut ax = make_axes();
-        let artist = ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        let artist = ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
         artist.decimate_with(500, DecimateMethod::MinMax);
         assert_eq!(
             artist.decimate,
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn line_no_decimate_disables() {
         let mut ax = make_axes();
-        let artist = ax.plot(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        let artist = ax.plot([0.0, 1.0], [0.0, 1.0]).unwrap();
         artist.no_decimate();
         assert_eq!(artist.decimate, DecimateMode::Off);
     }
@@ -237,8 +237,7 @@ mod tests {
         let n = 6000;
         let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
         let y: Vec<f64> = x.iter().map(|v| (v * 0.05).sin()).collect();
-        let indices =
-            DecimateMode::Explicit(100, DecimateMethod::Lttb).resolve_indices(&x, &y);
+        let indices = DecimateMode::Explicit(100, DecimateMethod::Lttb).resolve_indices(&x, &y);
         assert_eq!(indices.len(), 100);
         assert_eq!(*indices.first().unwrap(), 0);
         assert_eq!(*indices.last().unwrap(), n - 1);

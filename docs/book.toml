@@ -1,0 +1,12 @@
+[book]
+title = "plotkit"
+authors = ["plotkit contributors"]
+description = "User guide for plotkit, a publication-quality plotting library for Rust."
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/anonymousAAK/plotrs"
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-icon = "fa-github"

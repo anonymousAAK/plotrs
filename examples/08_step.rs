@@ -1,7 +1,7 @@
 //! Step chart example showing Pre and Post alignment modes.
 
-use plotkit::prelude::*;
 use plotkit::artist::StepWhere;
+use plotkit::prelude::*;
 
 fn main() -> plotkit::Result<()> {
     let x = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];

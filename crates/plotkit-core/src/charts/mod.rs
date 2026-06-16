@@ -4,19 +4,19 @@
 //! boxplot, errorbar, heatmap, pie, violin, contour, polar, hexbin, waterfall)
 //! has builder methods implemented directly on its artist type.
 
-pub mod line;
-pub mod scatter;
 pub mod bar;
-pub mod histogram;
-pub mod fill_between;
-pub mod step;
-pub mod stem;
 pub mod boxplot;
-pub mod errorbar;
-pub mod heatmap;
-pub mod pie;
-pub mod violin;
 pub mod contour;
-pub mod polar;
+pub mod errorbar;
+pub mod fill_between;
+pub mod heatmap;
 pub mod hexbin;
+pub mod histogram;
+pub mod line;
+pub mod pie;
+pub mod polar;
+pub mod scatter;
+pub mod stem;
+pub mod step;
+pub mod violin;
 pub mod waterfall;

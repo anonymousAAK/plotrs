@@ -16,8 +16,7 @@ fn main() {
         .arrowstyle(ArrowStyle::Simple);
 
     // Place a plain text label.
-    ax.text(5.0, -0.5, "sin(x)")
-        .fontsize(14.0);
+    ax.text(5.0, -0.5, "sin(x)").fontsize(14.0);
 
     ax.set_title("Annotations Demo");
     fig.save("examples/output/14_annotations.png").unwrap();

@@ -24,7 +24,10 @@ fn edge_empty_data_plot() {
     let ax = fig.add_subplot(1, 1, 1);
     let empty: Vec<f64> = vec![];
     let result = ax.plot(&empty, &empty);
-    assert!(result.is_err(), "plot() with empty data should return an error");
+    assert!(
+        result.is_err(),
+        "plot() with empty data should return an error"
+    );
     match result.unwrap_err() {
         plotkit::error::PlotError::EmptyData => {} // expected
         other => panic!("Expected EmptyData, got: {:?}", other),
@@ -37,7 +40,10 @@ fn edge_empty_data_scatter() {
     let ax = fig.add_subplot(1, 1, 1);
     let empty: Vec<f64> = vec![];
     let result = ax.scatter(&empty, &empty);
-    assert!(result.is_err(), "scatter() with empty data should return an error");
+    assert!(
+        result.is_err(),
+        "scatter() with empty data should return an error"
+    );
 }
 
 #[test]
@@ -47,7 +53,10 @@ fn edge_empty_data_bar() {
     let cats: Vec<&str> = vec![];
     let heights: Vec<f64> = vec![];
     let result = ax.bar(cats.as_slice(), &heights);
-    assert!(result.is_err(), "bar() with empty data should return an error");
+    assert!(
+        result.is_err(),
+        "bar() with empty data should return an error"
+    );
 }
 
 #[test]
@@ -56,7 +65,10 @@ fn edge_empty_data_hist() {
     let ax = fig.add_subplot(1, 1, 1);
     let empty: Vec<f64> = vec![];
     let result = ax.hist(&empty, 10);
-    assert!(result.is_err(), "hist() with empty data should return an error");
+    assert!(
+        result.is_err(),
+        "hist() with empty data should return an error"
+    );
 }
 
 // ============================================================================
@@ -67,7 +79,8 @@ fn edge_empty_data_hist() {
 fn edge_single_point_plot() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.plot([42.0], [7.0]).expect("single-point plot should succeed");
+    ax.plot([42.0], [7.0])
+        .expect("single-point plot should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty(), "SVG output should not be empty");
     assert!(svg.contains("<svg"), "output should be valid SVG");
@@ -77,7 +90,8 @@ fn edge_single_point_plot() {
 fn edge_single_point_scatter() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.scatter([1.0], [2.0]).expect("single-point scatter should succeed");
+    ax.scatter([1.0], [2.0])
+        .expect("single-point scatter should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -86,7 +100,8 @@ fn edge_single_point_scatter() {
 fn edge_single_point_hist() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.hist([5.0], 10).expect("single-point hist should succeed");
+    ax.hist([5.0], 10)
+        .expect("single-point hist should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -111,7 +126,8 @@ fn edge_very_large_values() {
 fn edge_very_large_values_scatter() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.scatter([1e15, 2e15], [3e15, 4e15]).expect("large-value scatter should succeed");
+    ax.scatter([1e15, 2e15], [3e15, 4e15])
+        .expect("large-value scatter should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -153,7 +169,10 @@ fn edge_all_negative_plot() {
     let y = vec![-100.0, -50.0, -10.0];
     ax.plot(&x, &y).expect("negative-value plot should succeed");
     let svg = render_svg(&fig);
-    assert!(!svg.is_empty(), "should produce output with negative values");
+    assert!(
+        !svg.is_empty(),
+        "should produce output with negative values"
+    );
 }
 
 #[test]
@@ -162,7 +181,8 @@ fn edge_all_negative_bar() {
     let ax = fig.add_subplot(1, 1, 1);
     let cats: &[&str] = &["a", "b", "c"];
     let heights = vec![-3.0, -5.0, -1.0];
-    ax.bar(cats, &heights).expect("negative-height bar should succeed");
+    ax.bar(cats, &heights)
+        .expect("negative-height bar should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -172,7 +192,8 @@ fn edge_all_negative_hist() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
     let data = vec![-10.0, -5.0, -3.0, -1.0, -0.5];
-    ax.hist(&data, 5).expect("negative-value hist should succeed");
+    ax.hist(&data, 5)
+        .expect("negative-value hist should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -187,7 +208,8 @@ fn edge_nan_inf_plot() {
     let ax = fig.add_subplot(1, 1, 1);
     let x = vec![1.0, f64::NAN, 3.0, f64::INFINITY, 5.0];
     let y = vec![2.0, 4.0, f64::NEG_INFINITY, 6.0, f64::NAN];
-    ax.plot(&x, &y).expect("NaN/Inf plot should succeed (data accepted)");
+    ax.plot(&x, &y)
+        .expect("NaN/Inf plot should succeed (data accepted)");
     // Rendering should not panic even with NaN/Inf values
     let svg = render_svg(&fig);
     assert!(!svg.is_empty(), "should produce output even with NaN/Inf");
@@ -199,7 +221,8 @@ fn edge_all_nan_plot() {
     let ax = fig.add_subplot(1, 1, 1);
     let x = vec![f64::NAN, f64::NAN, f64::NAN];
     let y = vec![f64::NAN, f64::NAN, f64::NAN];
-    ax.plot(&x, &y).expect("all-NaN plot should succeed (data accepted)");
+    ax.plot(&x, &y)
+        .expect("all-NaN plot should succeed (data accepted)");
     // Rendering should not panic
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
@@ -211,7 +234,8 @@ fn edge_all_inf_plot() {
     let ax = fig.add_subplot(1, 1, 1);
     let x = vec![f64::INFINITY, f64::NEG_INFINITY];
     let y = vec![f64::INFINITY, f64::NEG_INFINITY];
-    ax.plot(&x, &y).expect("all-Inf plot should succeed (data accepted)");
+    ax.plot(&x, &y)
+        .expect("all-Inf plot should succeed (data accepted)");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -268,7 +292,9 @@ fn edge_zero_height_figure() {
     let mut fig = Figure::with_size(800, 0);
     let ax = fig.add_subplot(1, 1, 1);
     ax.plot([1.0, 2.0], [3.0, 4.0]).unwrap();
-    let svg = fig.to_svg_string().expect("zero-height SVG should not fail");
+    let svg = fig
+        .to_svg_string()
+        .expect("zero-height SVG should not fail");
     assert!(svg.contains("<svg"));
 }
 
@@ -306,7 +332,8 @@ fn edge_huge_data_scatter() {
     let y: Vec<f64> = x.iter().map(|v| v.cos()).collect();
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
-    ax.scatter(&x, &y).expect("100k-point scatter should succeed");
+    ax.scatter(&x, &y)
+        .expect("100k-point scatter should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -352,7 +379,10 @@ fn edge_mismatched_lengths_scatter() {
     let result = ax.scatter(&x, &y);
     assert!(result.is_err());
     match result.unwrap_err() {
-        plotkit::error::PlotError::SeriesLengthMismatch { expected: 10, got: 5 } => {}
+        plotkit::error::PlotError::SeriesLengthMismatch {
+            expected: 10,
+            got: 5,
+        } => {}
         other => panic!("Expected SeriesLengthMismatch(10,5), got: {:?}", other),
     }
 }
@@ -382,7 +412,10 @@ fn edge_unicode_title() {
     let svg = render_svg(&fig);
     assert!(!svg.is_empty(), "Unicode labels should not break rendering");
     // Check that Unicode text appears in the SVG (possibly HTML-escaped)
-    assert!(svg.contains("Gaussian") || svg.contains("μ"), "Unicode text should appear in SVG");
+    assert!(
+        svg.contains("Gaussian") || svg.contains("μ"),
+        "Unicode text should appear in SVG"
+    );
 }
 
 #[test]
@@ -419,7 +452,10 @@ fn edge_empty_string_labels() {
     ax.set_xlabel("");
     ax.set_ylabel("");
     let svg = render_svg(&fig);
-    assert!(!svg.is_empty(), "empty-string labels should not break rendering");
+    assert!(
+        !svg.is_empty(),
+        "empty-string labels should not break rendering"
+    );
 }
 
 #[test]
@@ -481,9 +517,13 @@ fn edge_bar_all_zero_heights() {
     let ax = fig.add_subplot(1, 1, 1);
     let cats: &[&str] = &["a", "b", "c", "d"];
     let heights = vec![0.0, 0.0, 0.0, 0.0];
-    ax.bar(cats, &heights).expect("zero-height bars should succeed");
+    ax.bar(cats, &heights)
+        .expect("zero-height bars should succeed");
     let svg = render_svg(&fig);
-    assert!(!svg.is_empty(), "zero-height bar chart should produce valid SVG");
+    assert!(
+        !svg.is_empty(),
+        "zero-height bar chart should produce valid SVG"
+    );
 }
 
 #[test]
@@ -492,7 +532,8 @@ fn edge_bar_mixed_zero_and_nonzero() {
     let ax = fig.add_subplot(1, 1, 1);
     let cats: &[&str] = &["a", "b", "c"];
     let heights = vec![0.0, 5.0, 0.0];
-    ax.bar(cats, &heights).expect("mixed zero/non-zero bars should succeed");
+    ax.bar(cats, &heights)
+        .expect("mixed zero/non-zero bars should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -506,9 +547,13 @@ fn edge_hist_all_same_value() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
     let data = vec![5.0, 5.0, 5.0, 5.0, 5.0];
-    ax.hist(&data, 10).expect("all-same-value hist should succeed");
+    ax.hist(&data, 10)
+        .expect("all-same-value hist should succeed");
     let svg = render_svg(&fig);
-    assert!(!svg.is_empty(), "constant-data histogram should produce valid SVG");
+    assert!(
+        !svg.is_empty(),
+        "constant-data histogram should produce valid SVG"
+    );
 }
 
 #[test]
@@ -516,7 +561,8 @@ fn edge_hist_all_same_value_single_bin() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
     let data = vec![42.0; 100];
-    ax.hist(&data, 1).expect("all-same-value, 1 bin should succeed");
+    ax.hist(&data, 1)
+        .expect("all-same-value, 1 bin should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -526,7 +572,8 @@ fn edge_hist_all_same_value_many_bins() {
     let mut fig = Figure::new();
     let ax = fig.add_subplot(1, 1, 1);
     let data = vec![3.125; 50];
-    ax.hist(&data, 100).expect("all-same-value, 100 bins should succeed");
+    ax.hist(&data, 100)
+        .expect("all-same-value, 100 bins should succeed");
     let svg = render_svg(&fig);
     assert!(!svg.is_empty());
 }
@@ -540,7 +587,10 @@ fn edge_figure_no_axes_render() {
     // Render a figure with no axes at all
     let fig = Figure::new();
     let svg = render_svg(&fig);
-    assert!(!svg.is_empty(), "empty figure should still produce SVG wrapper");
+    assert!(
+        !svg.is_empty(),
+        "empty figure should still produce SVG wrapper"
+    );
     assert!(svg.contains("<svg"));
 }
 
@@ -550,7 +600,10 @@ fn edge_axes_no_data_render() {
     let mut fig = Figure::new();
     fig.add_subplot(1, 1, 1);
     let svg = render_svg(&fig);
-    assert!(!svg.is_empty(), "axes with no data should render background/spines");
+    assert!(
+        !svg.is_empty(),
+        "axes with no data should render background/spines"
+    );
 }
 
 #[test]

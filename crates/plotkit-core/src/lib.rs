@@ -9,36 +9,37 @@
 
 #![deny(missing_docs)]
 
-pub mod primitives;
-pub mod renderer;
-pub mod error;
-pub mod series;
-pub mod scale;
-pub mod ticks;
-pub mod theme;
-pub mod layout;
 pub mod annotations;
 pub mod artist;
 pub mod axes;
-pub mod figure;
-pub mod legend;
 pub mod charts;
-pub mod colormap;
 pub mod colorbar;
+pub mod colormap;
 pub mod decimate;
+pub mod error;
+pub mod figure;
+pub mod layout;
+pub mod legend;
+pub mod primitives;
+pub mod renderer;
+pub mod scale;
+pub mod series;
+pub mod text;
+pub mod theme;
+pub mod ticks;
 
 /// The plotkit-core prelude — import common types with a single `use` statement.
 pub mod prelude {
+    pub use crate::annotations::{Annotation, ArrowStyle, TextAnnotation};
+    pub use crate::axes::{Axes, TwinSide};
+    pub use crate::colorbar::{Colorbar, ColorbarOrientation};
+    pub use crate::colormap::Colormap;
+    pub use crate::decimate::{DecimateMethod, DecimateMode};
     pub use crate::error::{PlotError, Result};
     pub use crate::figure::Figure;
-    pub use crate::axes::{Axes, TwinSide};
     pub use crate::primitives::Color;
-    pub use crate::scale::Scale;
-    pub use crate::series::{IntoSeries, IntoCategories};
-    pub use crate::theme::{Theme, LineStyle, Marker, Loc, GridAxis};
-    pub use crate::colormap::Colormap;
-    pub use crate::colorbar::{Colorbar, ColorbarOrientation};
-    pub use crate::annotations::{ArrowStyle, TextAnnotation, Annotation};
     pub use crate::primitives::{HAlign, VAlign};
-    pub use crate::decimate::{DecimateMethod, DecimateMode};
+    pub use crate::scale::Scale;
+    pub use crate::series::{IntoCategories, IntoSeries};
+    pub use crate::theme::{GridAxis, LineStyle, Loc, Marker, Theme};
 }

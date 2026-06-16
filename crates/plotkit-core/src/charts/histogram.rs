@@ -197,9 +197,7 @@ pub fn compute_bins(data: &[f64], num_bins: usize) -> (Vec<f64>, Vec<f64>) {
     };
 
     let bin_width = (max - min) / num_bins as f64;
-    let edges: Vec<f64> = (0..=num_bins)
-        .map(|i| min + i as f64 * bin_width)
-        .collect();
+    let edges: Vec<f64> = (0..=num_bins).map(|i| min + i as f64 * bin_width).collect();
 
     // Count values in each bin.
     let mut counts = vec![0.0f64; num_bins];
@@ -402,8 +400,14 @@ mod tests {
     #[test]
     fn total_count_equals_finite_data_length() {
         let data = vec![
-            1.0, 2.0, 3.0, 4.0, 5.0,
-            f64::NAN, f64::INFINITY, f64::NEG_INFINITY,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
         ];
         let (_, counts) = compute_bins(&data, 3);
 
@@ -597,9 +601,7 @@ mod tests {
     #[test]
     fn builder_chaining() {
         let mut h = sample_hist();
-        h.color(Color::TAB_GREEN)
-            .label("Test")
-            .alpha(0.8);
+        h.color(Color::TAB_GREEN).label("Test").alpha(0.8);
 
         assert_eq!(h.color, Color::TAB_GREEN);
         assert_eq!(h.label.as_deref(), Some("Test"));

@@ -6,9 +6,7 @@
 
 use std::cell::RefCell;
 
-use cosmic_text::{
-    Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap,
-};
+use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use plotkit_core::primitives::*;
 use plotkit_core::renderer::Renderer;
 
@@ -83,8 +81,7 @@ impl SkiaRenderer {
     /// Panics if `width` or `height` is zero, or if the allocation exceeds
     /// platform limits.
     pub fn new(width: u32, height: u32) -> Self {
-        let pixmap =
-            tiny_skia::Pixmap::new(width, height).expect("failed to create pixmap");
+        let pixmap = tiny_skia::Pixmap::new(width, height).expect("failed to create pixmap");
         let font_system = RefCell::new(embedded_font_system());
         let swash_cache = SwashCache::new();
         Self {
@@ -255,13 +252,7 @@ impl Renderer for SkiaRenderer {
         self.recycle_path(sk_path);
     }
 
-    fn stroke_path(
-        &mut self,
-        path: &Path,
-        paint: &Paint,
-        stroke: &Stroke,
-        transform: Affine,
-    ) {
+    fn stroke_path(&mut self, path: &Path, paint: &Paint, stroke: &Stroke, transform: Affine) {
         let Some(sk_path) = self.take_built_path(path) else {
             return;
         };
@@ -336,7 +327,9 @@ impl Renderer for SkiaRenderer {
 
         // Now rasterise each glyph and composite onto the pixmap.
         for gi in &glyphs {
-            let image = self.swash_cache.get_image_uncached(font_system, gi.cache_key);
+            let image = self
+                .swash_cache
+                .get_image_uncached(font_system, gi.cache_key);
             let Some(image) = image else {
                 continue;
             };
@@ -688,6 +681,9 @@ mod tests {
         let non_white = data
             .chunks(4)
             .any(|px| px[0] != 255 || px[1] != 255 || px[2] != 255);
-        assert!(non_white, "expected rendered text to produce non-white pixels");
+        assert!(
+            non_white,
+            "expected rendered text to produce non-white pixels"
+        );
     }
 }

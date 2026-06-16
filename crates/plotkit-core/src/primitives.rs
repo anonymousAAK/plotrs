@@ -47,7 +47,12 @@ pub struct Rect {
 impl Rect {
     /// Creates a new rectangle from a top-left corner and dimensions.
     pub fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// Creates the smallest axis-aligned rectangle that contains both points.
@@ -59,15 +64,17 @@ impl Rect {
         let y = p1.y.min(p2.y);
         let width = (p1.x - p2.x).abs();
         let height = (p1.y - p2.y).abs();
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// Returns `true` if `p` lies inside or on the boundary of this rectangle.
     pub fn contains(&self, p: Point) -> bool {
-        p.x >= self.x
-            && p.x <= self.x + self.width
-            && p.y >= self.y
-            && p.y <= self.y + self.height
+        p.x >= self.x && p.x <= self.x + self.width && p.y >= self.y && p.y <= self.y + self.height
     }
 
     /// Returns the center point of the rectangle.
@@ -414,24 +421,14 @@ impl Path {
     /// Appends a quadratic Bezier curve through control point `(x1, y1)` to
     /// endpoint `(x, y)`.
     pub fn quad_to(&mut self, x1: f64, y1: f64, x: f64, y: f64) -> &mut Self {
-        self.elements.push(PathEl::QuadTo(
-            Point::new(x1, y1),
-            Point::new(x, y),
-        ));
+        self.elements
+            .push(PathEl::QuadTo(Point::new(x1, y1), Point::new(x, y)));
         self
     }
 
     /// Appends a cubic Bezier curve through control points `(x1, y1)` and
     /// `(x2, y2)` to endpoint `(x, y)`.
-    pub fn curve_to(
-        &mut self,
-        x1: f64,
-        y1: f64,
-        x2: f64,
-        y2: f64,
-        x: f64,
-        y: f64,
-    ) -> &mut Self {
+    pub fn curve_to(&mut self, x1: f64, y1: f64, x2: f64, y2: f64, x: f64, y: f64) -> &mut Self {
         self.elements.push(PathEl::CurveTo(
             Point::new(x1, y1),
             Point::new(x2, y2),

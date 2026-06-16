@@ -72,7 +72,11 @@ impl HeatmapArtist {
                 }
             }
         }
-        if lo.is_finite() { lo } else { 0.0 }
+        if lo.is_finite() {
+            lo
+        } else {
+            0.0
+        }
     }
 
     /// Returns the effective maximum value for colormap normalisation.
@@ -88,7 +92,11 @@ impl HeatmapArtist {
                 }
             }
         }
-        if hi.is_finite() { hi } else { 1.0 }
+        if hi.is_finite() {
+            hi
+        } else {
+            1.0
+        }
     }
 }
 
@@ -101,9 +109,14 @@ mod tests {
     fn sample_heatmap() -> HeatmapArtist {
         HeatmapArtist {
             data: vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]],
-            x_labels: None, y_labels: None,
-            cmap: Colormap::Viridis, vmin: None, vmax: None,
-            show_values: false, color: Color::TAB_BLUE, label: None,
+            x_labels: None,
+            y_labels: None,
+            cmap: Colormap::Viridis,
+            vmin: None,
+            vmax: None,
+            show_values: false,
+            color: Color::TAB_BLUE,
+            label: None,
             show_colorbar: false,
         }
     }
@@ -187,9 +200,15 @@ mod tests {
     #[test]
     fn effective_vmin_empty_data() {
         let h = HeatmapArtist {
-            data: vec![], x_labels: None, y_labels: None,
-            cmap: Colormap::Viridis, vmin: None, vmax: None,
-            show_values: false, color: Color::TAB_BLUE, label: None,
+            data: vec![],
+            x_labels: None,
+            y_labels: None,
+            cmap: Colormap::Viridis,
+            vmin: None,
+            vmax: None,
+            show_values: false,
+            color: Color::TAB_BLUE,
+            label: None,
             show_colorbar: false,
         };
         assert!((h.effective_vmin() - 0.0).abs() < f64::EPSILON);
@@ -198,9 +217,15 @@ mod tests {
     #[test]
     fn effective_vmax_empty_data() {
         let h = HeatmapArtist {
-            data: vec![], x_labels: None, y_labels: None,
-            cmap: Colormap::Viridis, vmin: None, vmax: None,
-            show_values: false, color: Color::TAB_BLUE, label: None,
+            data: vec![],
+            x_labels: None,
+            y_labels: None,
+            cmap: Colormap::Viridis,
+            vmin: None,
+            vmax: None,
+            show_values: false,
+            color: Color::TAB_BLUE,
+            label: None,
             show_colorbar: false,
         };
         assert!((h.effective_vmax() - 1.0).abs() < f64::EPSILON);
@@ -219,9 +244,15 @@ mod tests {
     #[test]
     fn data_bounds_empty() {
         let h = HeatmapArtist {
-            data: vec![], x_labels: None, y_labels: None,
-            cmap: Colormap::Viridis, vmin: None, vmax: None,
-            show_values: false, color: Color::TAB_BLUE, label: None,
+            data: vec![],
+            x_labels: None,
+            y_labels: None,
+            cmap: Colormap::Viridis,
+            vmin: None,
+            vmax: None,
+            show_values: false,
+            color: Color::TAB_BLUE,
+            label: None,
             show_colorbar: false,
         };
         assert_eq!(h.data_bounds(), (0.0, 1.0, 0.0, 1.0));
@@ -230,9 +261,15 @@ mod tests {
     #[test]
     fn data_bounds_single_cell() {
         let h = HeatmapArtist {
-            data: vec![vec![42.0]], x_labels: None, y_labels: None,
-            cmap: Colormap::Viridis, vmin: None, vmax: None,
-            show_values: false, color: Color::TAB_BLUE, label: None,
+            data: vec![vec![42.0]],
+            x_labels: None,
+            y_labels: None,
+            cmap: Colormap::Viridis,
+            vmin: None,
+            vmax: None,
+            show_values: false,
+            color: Color::TAB_BLUE,
+            label: None,
             show_colorbar: false,
         };
         let (xmin, xmax, ymin, ymax) = h.data_bounds();
@@ -245,8 +282,11 @@ mod tests {
     #[test]
     fn builder_chaining() {
         let mut h = sample_heatmap();
-        h.colormap(Colormap::Plasma).vmin(0.0).vmax(10.0)
-            .show_values(true).label("chained");
+        h.colormap(Colormap::Plasma)
+            .vmin(0.0)
+            .vmax(10.0)
+            .show_values(true)
+            .label("chained");
         assert_eq!(h.cmap, Colormap::Plasma);
         assert_eq!(h.vmin, Some(0.0));
         assert_eq!(h.vmax, Some(10.0));
@@ -258,9 +298,14 @@ mod tests {
     fn effective_bounds_with_nan() {
         let h = HeatmapArtist {
             data: vec![vec![f64::NAN, 3.0], vec![1.0, f64::NAN]],
-            x_labels: None, y_labels: None,
-            cmap: Colormap::Viridis, vmin: None, vmax: None,
-            show_values: false, color: Color::TAB_BLUE, label: None,
+            x_labels: None,
+            y_labels: None,
+            cmap: Colormap::Viridis,
+            vmin: None,
+            vmax: None,
+            show_values: false,
+            color: Color::TAB_BLUE,
+            label: None,
             show_colorbar: false,
         };
         assert!((h.effective_vmin() - 1.0).abs() < f64::EPSILON);

@@ -254,14 +254,14 @@ mod tests {
     #[test]
     fn scatter_defaults_to_auto_decimate() {
         let mut ax = make_axes();
-        let artist = ax.scatter(&[0.0, 1.0, 2.0], &[0.0, 1.0, 2.0]).unwrap();
+        let artist = ax.scatter([0.0, 1.0, 2.0], [0.0, 1.0, 2.0]).unwrap();
         assert_eq!(artist.decimate, DecimateMode::Auto);
     }
 
     #[test]
     fn scatter_decimate_sets_explicit_lttb() {
         let mut ax = make_axes();
-        let artist = ax.scatter(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        let artist = ax.scatter([0.0, 1.0], [0.0, 1.0]).unwrap();
         artist.decimate(2000);
         assert_eq!(
             artist.decimate,
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn scatter_decimate_with_sets_explicit_method() {
         let mut ax = make_axes();
-        let artist = ax.scatter(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        let artist = ax.scatter([0.0, 1.0], [0.0, 1.0]).unwrap();
         artist.decimate_with(750, DecimateMethod::MinMax);
         assert_eq!(
             artist.decimate,
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn scatter_no_decimate_disables() {
         let mut ax = make_axes();
-        let artist = ax.scatter(&[0.0, 1.0], &[0.0, 1.0]).unwrap();
+        let artist = ax.scatter([0.0, 1.0], [0.0, 1.0]).unwrap();
         artist.no_decimate();
         assert_eq!(artist.decimate, DecimateMode::Off);
     }
@@ -325,8 +325,7 @@ mod tests {
         let n = 8000;
         let x: Vec<f64> = (0..n).map(|i| i as f64).collect();
         let y: Vec<f64> = x.iter().map(|v| (v * 0.03).sin()).collect();
-        let indices =
-            DecimateMode::Explicit(300, DecimateMethod::MinMax).resolve_indices(&x, &y);
+        let indices = DecimateMode::Explicit(300, DecimateMethod::MinMax).resolve_indices(&x, &y);
         assert!(indices.len() <= 300);
         assert_eq!(*indices.first().unwrap(), 0);
         assert_eq!(*indices.last().unwrap(), n - 1);

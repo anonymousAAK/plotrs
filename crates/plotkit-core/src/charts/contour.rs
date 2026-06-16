@@ -358,10 +358,17 @@ mod tests {
     #[test]
     fn z_bounds_empty() {
         let c = ContourArtist {
-            x: vec![], y: vec![], z: vec![],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            x: vec![],
+            y: vec![],
+            z: vec![],
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let (lo, hi) = c.z_bounds();
         assert!((lo - 0.0).abs() < f64::EPSILON);
@@ -373,13 +380,15 @@ mod tests {
         let c = ContourArtist {
             x: vec![0.0, 1.0],
             y: vec![0.0, 1.0],
-            z: vec![
-                vec![f64::NAN, 3.0],
-                vec![1.0, f64::NAN],
-            ],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            z: vec![vec![f64::NAN, 3.0], vec![1.0, f64::NAN]],
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let (lo, hi) = c.z_bounds();
         assert!((lo - 1.0).abs() < f64::EPSILON);
@@ -409,9 +418,14 @@ mod tests {
             x: vec![0.0, 1.0],
             y: vec![0.0, 1.0],
             z: vec![vec![5.0, 5.0], vec![5.0, 5.0]],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let levels = c.effective_levels();
         assert_eq!(levels.len(), 1);
@@ -431,10 +445,17 @@ mod tests {
     #[test]
     fn data_bounds_empty() {
         let c = ContourArtist {
-            x: vec![], y: vec![], z: vec![],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            x: vec![],
+            y: vec![],
+            z: vec![],
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         assert_eq!(c.data_bounds(), (0.0, 1.0, 0.0, 1.0));
     }
@@ -442,10 +463,17 @@ mod tests {
     #[test]
     fn data_bounds_single_point() {
         let c = ContourArtist {
-            x: vec![5.0], y: vec![3.0], z: vec![vec![1.0]],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            x: vec![5.0],
+            y: vec![3.0],
+            z: vec![vec![1.0]],
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let (xmin, xmax, ymin, ymax) = c.data_bounds();
         assert!((xmin - 5.0).abs() < f64::EPSILON);
@@ -460,9 +488,14 @@ mod tests {
             x: vec![0.0, 1.0],
             y: vec![0.0, 1.0],
             z: vec![vec![0.0, 0.0], vec![0.0, 0.0]],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let segs = c.marching_squares(1.0);
         assert!(segs.is_empty());
@@ -474,9 +507,14 @@ mod tests {
             x: vec![0.0, 1.0],
             y: vec![0.0, 1.0],
             z: vec![vec![5.0, 5.0], vec![5.0, 5.0]],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let segs = c.marching_squares(1.0);
         assert!(segs.is_empty());
@@ -492,12 +530,20 @@ mod tests {
                 vec![1.0, 2.0, 3.0],
                 vec![2.0, 3.0, 4.0],
             ],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let segs = c.marching_squares(1.5);
-        assert!(!segs.is_empty(), "should produce at least one segment for level 1.5");
+        assert!(
+            !segs.is_empty(),
+            "should produce at least one segment for level 1.5"
+        );
     }
 
     #[test]
@@ -506,9 +552,14 @@ mod tests {
             x: vec![0.0, 1.0],
             y: vec![0.0, 1.0],
             z: vec![vec![0.0, f64::NAN], vec![1.0, 2.0]],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let segs = c.marching_squares(0.5);
         assert!(segs.is_empty());
@@ -520,9 +571,14 @@ mod tests {
             x: vec![0.0],
             y: vec![0.0],
             z: vec![vec![1.0]],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let segs = c.marching_squares(0.5);
         assert!(segs.is_empty());
@@ -541,10 +597,17 @@ mod tests {
     #[test]
     fn cell_averages_empty() {
         let c = ContourArtist {
-            x: vec![], y: vec![], z: vec![],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            x: vec![],
+            y: vec![],
+            z: vec![],
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let avgs = c.cell_averages();
         assert!(avgs.is_empty());
@@ -555,13 +618,15 @@ mod tests {
         let c = ContourArtist {
             x: vec![0.0, 1.0],
             y: vec![0.0, 1.0],
-            z: vec![
-                vec![f64::NAN, f64::NAN],
-                vec![f64::NAN, f64::NAN],
-            ],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            z: vec![vec![f64::NAN, f64::NAN], vec![f64::NAN, f64::NAN]],
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let avgs = c.cell_averages();
         assert_eq!(avgs.len(), 1);
@@ -574,13 +639,15 @@ mod tests {
         let c = ContourArtist {
             x: vec![0.0, 1.0],
             y: vec![0.0, 1.0],
-            z: vec![
-                vec![0.0, 1.0],
-                vec![1.0, 2.0],
-            ],
-            levels: None, filled: false, cmap: Colormap::Viridis,
-            colors: None, linewidths: 1.0, label: None,
-            color: Color::TAB_BLUE, num_levels: 10,
+            z: vec![vec![0.0, 1.0], vec![1.0, 2.0]],
+            levels: None,
+            filled: false,
+            cmap: Colormap::Viridis,
+            colors: None,
+            linewidths: 1.0,
+            label: None,
+            color: Color::TAB_BLUE,
+            num_levels: 10,
         };
         let segs = c.marching_squares(0.5);
         assert_eq!(segs.len(), 1);

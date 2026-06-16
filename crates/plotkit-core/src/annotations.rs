@@ -190,7 +190,11 @@ mod tests {
         assert!((t.rotation - 0.0).abs() < f64::EPSILON);
 
         // Builder chaining.
-        t.fontsize(14.0).color(Color::TAB_RED).ha(HAlign::Center).va(VAlign::Top).rotation(45.0);
+        t.fontsize(14.0)
+            .color(Color::TAB_RED)
+            .ha(HAlign::Center)
+            .va(VAlign::Top)
+            .rotation(45.0);
         assert_eq!(t.fontsize, Some(14.0));
         assert_eq!(t.color, Some(Color::TAB_RED));
         assert_eq!(t.ha, HAlign::Center);
@@ -217,7 +221,9 @@ mod tests {
         assert_eq!(a.arrowstyle, ArrowStyle::None);
 
         // Builder chaining.
-        a.arrowstyle(ArrowStyle::Simple).arrow_color(Color::TAB_BLUE).fontsize(12.0);
+        a.arrowstyle(ArrowStyle::Simple)
+            .arrow_color(Color::TAB_BLUE)
+            .fontsize(12.0);
         assert_eq!(a.arrowstyle, ArrowStyle::Simple);
         assert_eq!(a.arrow_color, Some(Color::TAB_BLUE));
         assert_eq!(a.fontsize, Some(12.0));

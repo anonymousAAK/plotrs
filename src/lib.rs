@@ -40,16 +40,19 @@ pub use plotkit_ndarray;
 #[cfg(feature = "polars")]
 pub use plotkit_polars;
 
-pub use plotkit_core::{primitives, renderer, error, series, scale, ticks, theme, layout, artist, annotations, axes, figure, legend, charts, colormap, colorbar};
-pub use plotkit_core::figure::Figure;
+pub use plotkit_core::annotations::{Annotation, ArrowStyle, TextAnnotation};
 pub use plotkit_core::axes::{Axes, TwinSide};
-pub use plotkit_core::primitives::Color;
-pub use plotkit_core::theme::{Theme, LineStyle, Marker, Loc, GridAxis};
-pub use plotkit_core::scale::Scale;
-pub use plotkit_core::series::{IntoSeries, IntoCategories};
 pub use plotkit_core::error::{PlotError, Result};
-pub use plotkit_core::annotations::{ArrowStyle, TextAnnotation, Annotation};
+pub use plotkit_core::figure::Figure;
+pub use plotkit_core::primitives::Color;
 pub use plotkit_core::primitives::{HAlign, VAlign};
+pub use plotkit_core::scale::Scale;
+pub use plotkit_core::series::{IntoCategories, IntoSeries};
+pub use plotkit_core::theme::{GridAxis, LineStyle, Loc, Marker, Theme};
+pub use plotkit_core::{
+    annotations, artist, axes, charts, colorbar, colormap, error, figure, layout, legend,
+    primitives, renderer, scale, series, theme, ticks,
+};
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -60,9 +63,12 @@ thread_local! {
 
 /// The plotkit prelude — import this for convenient access to all common types.
 pub mod prelude {
-    pub use plotkit_core::prelude::*;
-    pub use crate::{plot, scatter, bar, hist, title, xlabel, ylabel, xlim, ylim, grid, xticks, yticks, xscale, yscale, legend, savefig, clf, subplots};
     pub use crate::FigureExt;
+    pub use crate::{
+        bar, clf, grid, hist, legend, plot, savefig, scatter, subplots, title, xlabel, xlim,
+        xscale, xticks, ylabel, ylim, yscale, yticks,
+    };
+    pub use plotkit_core::prelude::*;
 }
 
 // === pyplot-style free functions ===
@@ -74,7 +80,9 @@ pub fn plot<X: IntoSeries, Y: IntoSeries>(x: X, y: Y) -> Result<()> {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").plot(x, y)?;
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .plot(x, y)?;
         Ok(())
     })
 }
@@ -86,7 +94,9 @@ pub fn scatter<X: IntoSeries, Y: IntoSeries>(x: X, y: Y) -> Result<()> {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").scatter(x, y)?;
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .scatter(x, y)?;
         Ok(())
     })
 }
@@ -98,7 +108,9 @@ pub fn bar<C: IntoCategories, H: IntoSeries>(categories: C, heights: H) -> Resul
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").bar(categories, heights)?;
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .bar(categories, heights)?;
         Ok(())
     })
 }
@@ -110,7 +122,9 @@ pub fn hist<D: IntoSeries>(data: D, bins: usize) -> Result<()> {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").hist(data, bins)?;
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .hist(data, bins)?;
         Ok(())
     })
 }
@@ -122,7 +136,9 @@ pub fn title(s: &str) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_title(s);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_title(s);
     })
 }
 
@@ -133,7 +149,9 @@ pub fn xlabel(s: &str) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xlabel(s);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_xlabel(s);
     })
 }
 
@@ -144,7 +162,9 @@ pub fn ylabel(s: &str) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_ylabel(s);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_ylabel(s);
     })
 }
 
@@ -155,7 +175,9 @@ pub fn xlim(min: f64, max: f64) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xlim(min, max);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_xlim(min, max);
     })
 }
 
@@ -166,7 +188,9 @@ pub fn ylim(min: f64, max: f64) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_ylim(min, max);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_ylim(min, max);
     })
 }
 
@@ -177,7 +201,9 @@ pub fn grid(visible: bool) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").grid(visible);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .grid(visible);
     })
 }
 
@@ -188,7 +214,9 @@ pub fn xticks(ticks: &[f64]) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xticks(ticks);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_xticks(ticks);
     })
 }
 
@@ -199,7 +227,9 @@ pub fn yticks(ticks: &[f64]) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_yticks(ticks);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_yticks(ticks);
     })
 }
 
@@ -210,7 +240,9 @@ pub fn xscale(scale: Scale) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_xscale(scale);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_xscale(scale);
     })
 }
 
@@ -221,7 +253,9 @@ pub fn yscale(scale: Scale) {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").set_yscale(scale);
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .set_yscale(scale);
     })
 }
 
@@ -232,7 +266,9 @@ pub fn legend() {
         if fig.num_axes() == 0 {
             fig.add_subplot(1, 1, 1);
         }
-        fig.axes_mut(0).expect("axes[0] exists after add_subplot").legend();
+        fig.axes_mut(0)
+            .expect("axes[0] exists after add_subplot")
+            .legend();
     })
 }
 
@@ -260,7 +296,8 @@ pub fn clf() {
 
 /// Saves a figure to a file, selecting the renderer by file extension.
 pub fn save_figure(fig: &Figure, path: &Path) -> Result<()> {
-    let ext = path.extension()
+    let ext = path
+        .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_lowercase();
@@ -273,6 +310,11 @@ pub fn save_figure(fig: &Figure, path: &Path) -> Result<()> {
         #[cfg(feature = "svg")]
         "svg" => {
             let renderer = plotkit_render_svg::SvgRenderer::new(fig.width(), fig.height());
+            fig.render_to(renderer)
+        }
+        #[cfg(feature = "pdf")]
+        "pdf" => {
+            let renderer = plotkit_render_pdf::PdfRenderer::new(fig.width(), fig.height());
             fig.render_to(renderer)
         }
         other => return Err(PlotError::UnsupportedFormat(other.to_string())),
@@ -290,6 +332,9 @@ pub trait FigureExt {
     fn to_png_bytes(&self) -> Result<Vec<u8>>;
     /// Renders to SVG string.
     fn to_svg_string(&self) -> Result<String>;
+    /// Renders to PDF bytes (requires the `pdf` feature).
+    #[cfg(feature = "pdf")]
+    fn to_pdf_bytes(&self) -> Result<Vec<u8>>;
 }
 
 impl FigureExt for Figure {
@@ -307,9 +352,18 @@ impl FigureExt for Figure {
         {
             let renderer = plotkit_render_svg::SvgRenderer::new(self.width(), self.height());
             let bytes = self.render_to(renderer);
-            String::from_utf8(bytes).map_err(|_| PlotError::UnsupportedFormat("svg encoding error".into()))
+            String::from_utf8(bytes)
+                .map_err(|_| PlotError::UnsupportedFormat("svg encoding error".into()))
         }
         #[cfg(not(feature = "svg"))]
-        Err(PlotError::UnsupportedFormat("svg feature not enabled".into()))
+        Err(PlotError::UnsupportedFormat(
+            "svg feature not enabled".into(),
+        ))
+    }
+
+    #[cfg(feature = "pdf")]
+    fn to_pdf_bytes(&self) -> Result<Vec<u8>> {
+        let renderer = plotkit_render_pdf::PdfRenderer::new(self.width(), self.height());
+        Ok(self.render_to(renderer))
     }
 }

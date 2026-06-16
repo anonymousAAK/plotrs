@@ -92,7 +92,9 @@ impl Colormap {
     /// sign).
     pub fn map_values(&self, vals: &[f64]) -> Vec<Color> {
         let (vmin, vmax) = finite_bounds(vals);
-        vals.iter().map(|&v| self.map_value(v, vmin, vmax)).collect()
+        vals.iter()
+            .map(|&v| self.map_value(v, vmin, vmax))
+            .collect()
     }
 
     /// Returns the [`colorous::Gradient`] for this colormap variant.

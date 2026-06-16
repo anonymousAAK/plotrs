@@ -9,10 +9,7 @@ use plotkit::FigureExt;
 
 fn main() -> plotkit::Result<()> {
     let x: Vec<f64> = (0..100).map(|i| i as f64).collect();
-    let temp: Vec<f64> = x
-        .iter()
-        .map(|&t| 20.0 + 10.0 * (t * 0.05).sin())
-        .collect();
+    let temp: Vec<f64> = x.iter().map(|&t| 20.0 + 10.0 * (t * 0.05).sin()).collect();
     let pressure: Vec<f64> = x
         .iter()
         .map(|&t| 1013.0 + 50.0 * (t * 0.03).cos())
