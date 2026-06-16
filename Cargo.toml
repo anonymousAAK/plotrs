@@ -10,7 +10,6 @@ rust-version = "1.75"
 description = "A matplotlib-shaped, publication-quality plotting library for Rust"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/anonymousAAK/plotrs"
-homepage = "https://plotkit.rs"
 documentation = "https://docs.rs/plotkit"
 readme = "README.md"
 keywords = ["plotting", "chart", "visualization", "svg", "matplotlib"]
