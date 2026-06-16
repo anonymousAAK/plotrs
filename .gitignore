@@ -21,3 +21,6 @@ examples/output/
 HOME.md
 IMPLEMENTATION_PLAN.md
 plotkit-knowledge-hub/
+
+# Claude Code session/worktrees
+.claude/
